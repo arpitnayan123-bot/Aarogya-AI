@@ -1,0 +1,544 @@
+     1→     1→import React, { useState } from 'react';
+     2→     2→import { FileText, Droplets, Activity, MessageCircle, Brain, TrendingUp, ShieldCheck, Zap, ArrowRight, Scan, Bone, HeartPulse, Activity as ActivityIcon, Globe, ScanLine } from 'lucide-react';
+     3→     3→import { DNABackground } from './DNABackground';
+     4→     4→
+     5→     5→interface DashboardProps {
+     6→     6→  onNavigate: (tab: string) => void;
+     7→     7→}
+     8→     8→
+     9→     9→// Premium Skeleton HUD — Medical-grade, calm, intelligent motion system
+    10→    10→interface RotatingSkeletonHUDProps {
+    11→    11→  isUserActive?: boolean;
+    12→    12→}
+    13→    13→
+    14→    14→const RotatingSkeletonHUD = ({ isUserActive = false }: RotatingSkeletonHUDProps) => {
+    15→    15→  return (
+    16→    16→    <div className="relative w-32 h-32 sm:w-40 sm:h-40 flex items-center justify-center [perspective:1000px]">
+    17→    17→      {/* Outer orbit ring - smooth 10s rotation */}
+    18→    18→      <div className="absolute inset-0 animate-orbitOrbit">
+    19→    19→        <svg viewBox="0 0 160 160" className="w-full h-full">
+    20→    20→          <circle cx="80" cy="80" r="75" fill="none" stroke="rgba(56, 189, 248, 0.25)" strokeWidth="1" strokeDasharray="6 6" />
+    21→    21→          <circle cx="80" cy="80" r="70" fill="none" stroke="rgba(56, 189, 248, 0.08)" strokeWidth="2" strokeDasharray="15 100" />
+    22→    22→        </svg>
+    23→    23→      </div>
+    24→    24→      
+    25→    25→      {/* Middle orbit ring - counter-rotates */}
+    26→    26→      <div className="absolute inset-4 animate-orbitOrbit" style={{ animationDirection: 'reverse', animationDuration: '14s' }}>
+    27→    27→        <svg viewBox="0 0 120 120" className="w-full h-full">
+    28→    28→          <circle cx="60" cy="60" r="55" fill="none" stroke="rgba(16, 185, 129, 0.25)" strokeWidth="1" strokeDasharray="4 12" />
+    29→    29→        </svg>
+    30→    30→      </div>
+    31→    31→
+    32→    32→      {/* Orbiting medical icons (4 icons, counter-rotate to stay upright) */}
+    33→    33→      <div className="absolute inset-0 animate-orbitOrbit">
+    34→    34→        {/* HeartPulse - top */}
+    35→    35→        <div className="absolute top-0 left-1/2 -translate-x-1/2 animate-orbitCounter">
+    36→    36→          <div className="p-2 bg-cyan-500/15 border border-cyan-400/30 rounded-full backdrop-blur-sm hover:bg-cyan-500/30 transition-all">
+    37→    37→            <HeartPulse className="w-3.5 h-3.5 text-cyan-200" />
+    38→    38→          </div>
+    39→    39→        </div>
+    40→    40→        {/* Activity - right */}
+    41→    41→        <div className="absolute top-1/2 right-0 -translate-y-1/2 animate-orbitCounter">
+    42→    42→          <div className="p-2 bg-emerald-500/15 border border-emerald-400/30 rounded-full backdrop-blur-sm hover:bg-emerald-500/30 transition-all">
+    43→    43→            <ActivityIcon className="w-3.5 h-3.5 text-emerald-200" />
+    44→    44→          </div>
+    45→    45→        </div>
+    46→    46→        {/* Scan - bottom */}
+    47→    47→        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 animate-orbitCounter">
+    48→    48→          <div className="p-2 bg-purple-500/15 border border-purple-400/30 rounded-full backdrop-blur-sm hover:bg-purple-500/30 transition-all">
+    49→    49→            <Scan className="w-3.5 h-3.5 text-purple-200" />
+    50→    50→          </div>
+    51→    51→        </div>
+    52→    52→        {/* Bone - left */}
+    53→    53→        <div className="absolute top-1/2 left-0 -translate-y-1/2 animate-orbitCounter">
+    54→    54→          <div className="p-2 bg-amber-500/15 border border-amber-400/30 rounded-full backdrop-blur-sm hover:bg-amber-500/30 transition-all">
+    55→    55→            <Bone className="w-3.5 h-3.5 text-amber-200" />
+    56→    56→          </div>
+    57→    57→        </div>
+    58→    58→      </div>
+    59→    59→
+    60→    60→      {/* Data stream dots (4 dots orbiting at different speeds) */}
+    61→    61→      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+    62→    62→        {[0, 90, 180, 270].map((deg, i) => (
+    63→    63→          <div 
+    64→    64→            key={i}
+    65→    65→            className="absolute w-1 h-1 bg-cyan-400 rounded-full animate-dataStream"
+    66→    66→            style={{
+    67→    67→              animationDuration: `${5 + i * 0.5}s`,
+    68→    68→              animationDelay: `${i * -1.25}s`,
+    69→    69→              transform: `rotate(${deg}deg)`
+    70→    70→            }}
+    71→    71→          />
+    72→    72→        ))}
+    73→    73→      </div>
+    74→    74→
+    75→    75→      {/* ENHANCED SKELETON WITH VISIBLE ORGANS - 180° Rotation */}
+    76→    76→      <div className="relative z-10 animate-skeletonBreathe">
+    77→    77→        <div className={`animate-skeletonRotateY ${isUserActive ? 'animate-180Rotate' : ''}`} style={{ animationDuration: '12s' }}>
+    78→    78→          <div className="animate-skeletonTiltZ">
+    79→    79→            {/* Hologram glow base - intensifies on user activity */}
+    80→    80→            <div className={`absolute inset-0 bg-cyan-500/15 rounded-full blur-2xl ${isUserActive ? 'animate-glowIntensify' : 'animate-hologramPulse'}`} />
+    81→    81→            {/* Soft aura - intensifies on user activity */}
+    82→    82→            <div className={`absolute inset-4 bg-teal-400/10 rounded-full blur-xl ${isUserActive ? 'animate-glowIntensify' : 'animate-hologramPulse'}`} style={{ animationDelay: '0.5s' }} />
+    83→    83→            
+    84→    84→            {/* ULTRA-PREMIUM ANATOMICAL HEART */}
+    85→    85→            <svg 
+    86→    86→              viewBox="0 0 200 200" 
+    87→    87→              className={`relative w-28 h-28 sm:w-36 sm:h-36 transition-all cursor-pointer`}
+    88→    88→            >
+    89→    89→              <defs>
+    90→    90→                {/* Rich 3D Radial Gradient for Heart Body */}
+    91→    91→                <radialGradient id="heartBody" cx="35%" cy="30%" r="70%">
+    92→    92→                  <stop offset="0%" stopColor="#ff6b7a" />
+    93→    93→                  <stop offset="35%" stopColor="#dc2626" />
+    94→    94→                  <stop offset="70%" stopColor="#991b1b" />
+    95→    95→                  <stop offset="100%" stopColor="#7f1d1d" />
+    96→    96→                </radialGradient>
+    97→    97→                
+    98→    98→                {/* Arterial red gradient */}
+    99→    99→                <linearGradient id="arteryRed" x1="0%" y1="0%" x2="0%" y2="100%">
+   100→   100→                  <stop offset="0%" stopColor="#dc2626" />
+   101→   101→                  <stop offset="100%" stopColor="#7f1d1d" />
+   102→   102→                </linearGradient>
+   103→   103→                
+   104→   104→                {/* Venous blue gradient */}
+   105→   105→                <linearGradient id="veinBlue" x1="0%" y1="0%" x2="0%" y2="100%">
+   106→   106→                  <stop offset="0%" stopColor="#4c1d95" />
+   107→   107→                  <stop offset="100%" stopColor="#1e1b4b" />
+   108→   108→                </linearGradient>
+   109→   109→                
+   110→   110→                {/* Specular highlight */}
+   111→   111→                <radialGradient id="specular" cx="30%" cy="30%" r="50%">
+   112→   112→                  <stop offset="0%" stopColor="#ffffff" stopOpacity="0.6" />
+   113→   113→                  <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+   114→   114→                </radialGradient>
+   115→   115→
+   116→   116→                {/* Glow filter */}
+   117→   117→                <filter id="heartGlow" x="-50%" y="-50%" width="200%" height="200%">
+   118→   118→                  <feGaussianBlur stdDeviation="3" result="coloredBlur" />
+   119→   119→                  <feMerge>
+   120→   120→                    <feMergeNode in="coloredBlur" />
+   121→   121→                    <feMergeNode in="SourceGraphic" />
+   122→   122→                  </feMerge>
+   123→   123→                </filter>
+   124→   124→                
+   125→   125→                {/* Inner shadow for depth */}
+   126→   126→                <filter id="innerShadow">
+   127→   127→                  <feGaussianBlur in="SourceAlpha" stdDeviation="3" result="blur" />
+   128→   128→                  <feOffset in="blur" dx="0" dy="2" result="offsetBlur" />
+   129→   129→                  <feComposite in="SourceGraphic" in2="offsetBlur" operator="over" />
+   130→   130→                </filter>
+   131→   131→              </defs>
+   132→   132→
+   133→   133→              {/* OUTER GLOW - pulsing with heartbeat */}
+   134→   134→              <g className="animate-heartGlowPulse">
+   135→   135→                <path 
+   136→   136→                  d="M100 170 C55 140 30 105 40 75 C50 45 80 40 100 65 C120 40 150 45 160 75 C170 105 145 140 100 170" 
+   137→   137→                  fill="none"
+   138→   138→                  stroke="#ef4444"
+   139→   139→                  strokeWidth="2"
+   140→   140→                  opacity="0.3"
+   141→   141→                  filter="url(#heartGlow)"
+   142→   142→                />
+   143→   143→              </g>
+   144→   144→
+   145→   145→              {/* PULSE RINGS - expanding outward */}
+   146→   146→              <circle cx="100" cy="105" r="60" fill="none" stroke="#dc2626" strokeWidth="1" opacity="0" className="animate-pulseRingFade" />
+   147→   147→              <circle cx="100" cy="105" r="60" fill="none" stroke="#dc2626" strokeWidth="1" opacity="0" className="animate-pulseRingFade" style={{ animationDelay: '1.5s' }} />
+   148→   148→              <circle cx="100" cy="105" r="60" fill="none" stroke="#dc2626" strokeWidth="1" opacity="0" className="animate-pulseRingFade" style={{ animationDelay: '3s' }} />
+   149→   149→
+   150→   150→              {/* MAIN HEART GROUP - with cardiac cycle */}
+   151→   151→              <g className="animate-cardiacCycle">
+   152→   152→                {/* Superior Vena Cava (Blue vein - deoxygenated blood) */}
+   153→   153→                <path 
+   154→   154→                  d="M75 65 Q72 50 70 35 Q70 25 80 22 Q90 22 90 32 Q90 45 88 65" 
+   155→   155→                  fill="url(#veinBlue)"
+   156→   156→                  opacity="0.95"
+   157→   157→                />
+   158→   158→                
+   159→   159→                {/* Aorta (Red artery - oxygenated blood) - prominent arch */}
+   160→   160→                <path 
+   161→   161→                  d="M110 70 Q115 40 130 30 Q150 20 165 35 Q175 45 170 60 Q165 70 155 75" 
+   162→   162→                  fill="url(#arteryRed)"
+   163→   163→                  opacity="0.95"
+   164→   164→                  filter="url(#innerShadow)"
+   165→   165→                />
+   166→   166→                <path 
+   167→   167→                  d="M155 75 Q150 72 145 75" 
+   168→   168→                  fill="none" 
+   169→   169→                  stroke="#7f1d1d" 
+   170→   170→                  strokeWidth="1.5"
+   171→   171→                />
+   172→   172→
+   173→   173→                {/* Pulmonary Artery (branching) */}
+   174→   174→                <path 
+   175→   175→                  d="M85 60 Q80 50 75 45 Q70 42 68 48 Q70 55 75 62" 
+   176→   176→                  fill="#4c1d95"
+   177→   177→                  opacity="0.85"
+   178→   178→                />
+   179→   179→
+   180→   180→                {/* MAIN HEART BODY - Anatomical shape with outline */}
+   181→   181→                <path 
+   182→   182→                  d="M100 175 C60 148 38 118 48 85 C55 60 82 55 100 78 C118 55 145 60 152 85 C162 118 140 148 100 175 Z" 
+   183→   183→                  fill="url(#heartBody)"
+   184→   184→                  filter="url(#heartGlow)"
+   185→   185→                  stroke="#450a0a"
+   186→   186→                  strokeWidth="0.8"
+   187→   187→                  strokeOpacity="0.3"
+   188→   188→                />
+   189→   189→
+   190→   190→                {/* Left Ventricle bulge (right side of heart from viewer) */}
+   191→   191→                <path 
+   192→   192→                  d="M120 95 Q150 95 155 120 Q158 145 130 165 Q115 170 110 160" 
+   193→   193→                  fill="#b91c1c"
+   194→   194→                  opacity="0.6"
+   195→   195→                />
+   196→   196→
+   197→   197→                {/* Right Ventricle (left side) */}
+   198→   198→                <path 
+   199→   199→                  d="M80 95 Q50 95 45 120 Q42 145 70 165 Q85 170 90 160" 
+   200→   200→                  fill="#7f1d1d"
+   201→   201→                  opacity="0.5"
+   202→   202→                />
+   203→   203→
+   204→   204→                {/* Left Atrium (top right bump) */}
+   205→   205→                <ellipse cx="125" cy="80" rx="18" ry="15" fill="#991b1b" opacity="0.7" />
+   206→   206→                
+   207→   207→                {/* Right Atrium (top left bump) */}
+   208→   208→                <ellipse cx="75" cy="80" rx="18" ry="15" fill="#7f1d1d" opacity="0.6" />
+   209→   209→
+   210→   210→                {/* Interventricular Septum (center line) */}
+   211→   211→                <path 
+   212→   212→                  d="M100 80 L100 165" 
+   213→   213→                  fill="none" 
+   214→   214→                  stroke="#450a0a" 
+   215→   215→                  strokeWidth="1"
+   216→   216→                  opacity="0.4"
+   217→   217→                />
+   218→   218→
+   219→   219→                {/* CHAMBERS - with pulsing animation */}
+   220→   220→                {/* Left Ventricle inner */}
+   221→   221→                <ellipse cx="120" cy="130" rx="22" ry="28" fill="#dc2626" opacity="0.5" className="animate-chamberPulse" style={{ animationDelay: '0.1s' }} />
+   222→   222→                
+   223→   223→                {/* Right Ventricle inner */}
+   224→   224→                <ellipse cx="80" cy="130" rx="20" ry="25" fill="#991b1b" opacity="0.45" className="animate-chamberPulse" style={{ animationDelay: '0.2s' }} />
+   225→   225→
+   226→   226→                {/* VALVES - opening/closing with beat */}
+   227→   227→                {/* Aortic Valve */}
+   228→   228→                <ellipse cx="110" cy="72" rx="5" ry="3" fill="#fecaca" opacity="0.7" className="animate-valve" />
+   229→   229→                {/* Mitral Valve */}
+   230→   230→                <ellipse cx="85" cy="95" rx="6" ry="3" fill="#fecaca" opacity="0.7" className="animate-valve" style={{ animationDelay: '0.05s' }} />
+   231→   231→                {/* Tricuspid Valve */}
+   232→   232→                <ellipse cx="115" cy="95" rx="6" ry="3" fill="#fecaca" opacity="0.7" className="animate-valve" style={{ animationDelay: '0.1s' }} />
+   233→   233→
+   234→   234→                {/* CORONARY ARTERIES - animated flowing blood */}
+   235→   235→                <defs>
+   236→   236→                  <linearGradient id="bloodGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+   237→   237→                    <stop offset="0%" stopColor="#7f1d1d" stopOpacity="0.2" />
+   238→   238→                    <stop offset="50%" stopColor="#dc2626" stopOpacity="1" />
+   239→   239→                    <stop offset="100%" stopColor="#7f1d1d" stopOpacity="0.2" />
+   240→   240→                  </linearGradient>
+   241→   241→                </defs>
+   242→   242→                <path 
+   243→   243→                  d="M95 85 Q75 110 70 140" 
+   244→   244→                  fill="none" 
+   245→   245→                  stroke="url(#bloodGradient)" 
+   246→   246→                  strokeWidth="2.5"
+   247→   247→                  strokeDasharray="6 8"
+   248→   248→                  opacity="0.9"
+   249→   249→                  className="animate-bloodFlow"
+   250→   250→                />
+   251→   251→                <path 
+   252→   252→                  d="M105 85 Q125 110 130 140" 
+   253→   253→                  fill="none" 
+   254→   254→                  stroke="url(#bloodGradient)" 
+   255→   255→                  strokeWidth="2.5"
+   256→   256→                  strokeDasharray="6 8"
+   257→   257→                  opacity="0.9"
+   258→   258→                  className="animate-bloodFlow"
+   259→   259→                  style={{ animationDelay: '1.5s' }}
+   260→   260→                />
+   261→   261→
+   262→   262→                {/* STATIC HIGHLIGHT - top-left sheen for 3D depth */}
+   263→   263→                <ellipse 
+   264→   264→                  cx="75" 
+   265→   265→                  cy="70" 
+   266→   266→                  rx="25" 
+   267→   267→                  ry="18" 
+   268→   268→                  fill="url(#specular)"
+   269→   269→                  opacity="0.3"
+   270→   270→                />
+   271→   271→                
+   272→   272→                {/* MOVING SPECULAR HIGHLIGHT - animated sheen */}
+   273→   273→                <ellipse 
+   274→   274→                  cx="80" 
+   275→   275→                  cy="75" 
+   276→   276→                  rx="20" 
+   277→   277→                  ry="15" 
+   278→   278→                  fill="url(#specular)"
+   279→   279→                  className="animate-specularSweep"
+   280→   280→                />
+   281→   281→
+   282→   282→                {/* Small coronary branches */}
+   283→   283→                <path d="M80 110 Q70 115 65 125" fill="none" stroke="#fca5a5" strokeWidth="1" strokeDasharray="2 4" className="animate-bloodFlow" opacity="0.6" />
+   284→   284→                <path d="M120 110 Q130 115 135 125" fill="none" stroke="#fca5a5" strokeWidth="1" strokeDasharray="2 4" className="animate-bloodFlow" opacity="0.6" style={{ animationDelay: '0.5s' }} />
+   285→   285→              </g>
+   286→   286→
+   287→   287→              {/* ORBITING ENERGY PARTICLES - 4 clockwise */}
+   288→   288→              <g className="animate-orbitParticle">
+   289→   289→                <circle cx="100" cy="100" r="2.2" fill="#fca5a5" opacity="0.9" />
+   290→   290→              </g>
+   291→   291→              <g className="animate-orbitParticle" style={{ animationDelay: '2.5s' }}>
+   292→   292→                <circle cx="100" cy="100" r="1.8" fill="#f87171" opacity="0.8" />
+   293→   293→              </g>
+   294→   294→              <g className="animate-orbitParticle" style={{ animationDelay: '5s' }}>
+   295→   295→                <circle cx="100" cy="100" r="2" fill="#fecaca" opacity="0.85" />
+   296→   296→              </g>
+   297→   297→              <g className="animate-orbitParticle" style={{ animationDelay: '7.5s' }}>
+   298→   298→                <circle cx="100" cy="100" r="1.6" fill="#fca5a5" opacity="0.75" />
+   299→   299→              </g>
+   300→   300→              
+   301→   301→              {/* Counter-rotating particles - 3 particles */}
+   302→   302→              <g className="animate-orbitParticleReverse">
+   303→   303→                <circle cx="100" cy="100" r="1.5" fill="#fecaca" opacity="0.7" />
+   304→   304→              </g>
+   305→   305→              <g className="animate-orbitParticleReverse" style={{ animationDelay: '4s' }}>
+   306→   306→                <circle cx="100" cy="100" r="1.3" fill="#f87171" opacity="0.6" />
+   307→   307→              </g>
+   308→   308→              <g className="animate-orbitParticleReverse" style={{ animationDelay: '8s' }}>
+   309→   309→                <circle cx="100" cy="100" r="1.5" fill="#fecaca" opacity="0.7" />
+   310→   310→              </g>
+   311→   311→
+   312→   312→              {/* CENTER PULSE - energy core */}
+   313→   313→              <circle cx="100" cy="100" r="4" fill="#fecaca" opacity="0.3">
+   314→   314→                <animate attributeName="r" values="3;6;3" dur="1.4s" repeatCount="indefinite" />
+   315→   315→                <animate attributeName="opacity" values="0.2;0.5;0.2" dur="1.4s" repeatCount="indefinite" />
+   316→   316→              </circle>
+   317→   317→            </svg>
+   318→   318→
+   319→   319→            {/* Horizontal scan line moving through skeleton */}
+   320→   320→            <div className="absolute inset-x-0 flex justify-center pointer-events-none">
+   321→   321→              <div className="w-16 h-px bg-gradient-to-r from-transparent via-cyan-300 to-transparent animate-scanLine" />
+   322→   322→            </div>
+   323→   323→          </div>
+   324→   324→        </div>
+   325→   325→      </div>
+   326→   326→    </div>
+   327→   327→  );
+   328→   328→};
+   329→   329→
+   330→   330→export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
+   331→   331→  const [isUserActive, setIsUserActive] = useState(false);
+   332→   332→
+   333→   333→  // Track user activity for subtle animation feedback
+   334→   334→  React.useEffect(() => {
+   335→   335→    const handleActivity = () => {
+   336→   336→      setIsUserActive(true);
+   337→   337→      setTimeout(() => setIsUserActive(false), 2000);
+   338→   338→    };
+   339→   339→
+   340→   340→    window.addEventListener('mousemove', handleActivity);
+   341→   341→    window.addEventListener('click', handleActivity);
+   342→   342→    window.addEventListener('scroll', handleActivity);
+   343→   343→
+   344→   344→    return () => {
+   345→   345→      window.removeEventListener('mousemove', handleActivity);
+   346→   346→      window.removeEventListener('click', handleActivity);
+   347→   347→      window.removeEventListener('scroll', handleActivity);
+   348→   348→    };
+   349→   349→  }, []);
+   350→   350→
+   351→   351→  const features = [
+   352→   352→    { id: 'report_analyzer', icon: FileText, title: 'Lab Reports', desc: 'Understand your reports instantly', color: 'from-purple-400 to-indigo-500', shadow: 'shadow-purple-500/15' },
+   353→   353→    { id: 'diabetes', icon: Droplets, title: 'Diabetes Care', desc: 'Track glucose, meals & insulin', color: 'from-sky-400 to-blue-500', shadow: 'shadow-sky-500/15' },
+   354→   354→    { id: 'symptom_checker', icon: Activity, title: 'Symptom Checker', desc: 'Get insights in your language', color: 'from-emerald-400 to-teal-500', shadow: 'shadow-emerald-500/15' },
+   355→   355→    { id: 'ai_chat', icon: MessageCircle, title: 'Health Assistant', desc: 'Ask anything, anytime', color: 'from-amber-400 to-orange-500', shadow: 'shadow-amber-500/15' },
+   356→   356→    { id: 'predictive_analytics', icon: TrendingUp, title: 'Health Trends', desc: 'See your health journey', color: 'from-rose-400 to-pink-500', shadow: 'shadow-rose-500/15' },
+   357→   357→    { id: 'disease_predictor', icon: Brain, title: 'Risk Assessment', desc: 'Understand your risks', color: 'from-indigo-400 to-purple-500', shadow: 'shadow-indigo-500/15' },
+   358→   358→    { id: 'skin_analyzer', icon: ScanLine, title: 'DermAI Scan', desc: 'AI skin & face analysis', color: 'from-teal-400 to-emerald-500', shadow: 'shadow-teal-500/15' },
+   359→   359→  ];
+   360→   360→
+   361→   361→  return (
+   362→   362→    <div className="relative space-y-6 animate-fadeIn max-w-6xl mx-auto">
+   363→   363→      {/* DNA Background - Layer 1 (Behind everything) */}
+   364→   364→      <DNABackground processing={isUserActive} />
+   365→   365→
+   366→   366→      {/* Emotional Context Section - Integrated with Hero */}
+   367→   367→      <div className="relative z-10 text-center py-4 sm:py-6 animate-fadeSlideUp stagger-1">
+   368→   368→        <p className="text-base sm:text-lg md:text-xl font-medium text-slate-600 max-w-3xl mx-auto leading-relaxed tracking-tight">
+   369→   369→          Millions of patients receive medical reports they don't understand.
+   370→   370→        </p>
+   371→   371→        <p className="text-sm sm:text-base md:text-lg font-normal text-slate-500 max-w-2xl mx-auto leading-relaxed mt-2 animate-fadeIn" style={{ animationDelay: '0.3s', animationFillMode: 'backwards' }}>
+   372→   372→          Nexura AI helps you understand them instantly.
+   373→   373→        </p>
+   374→   374→        
+   375→   375→        {/* Premium ECG Animation Divider - Subtle, overlaps text elegantly */}
+   376→   376→        <div className="w-full max-w-2xl mx-auto h-12 mt-4 relative flex items-center justify-center">
+   377→   377→          <svg viewBox="0 0 400 30" className="w-full h-full opacity-40" preserveAspectRatio="none">
+   378→   378→            <defs>
+   379→   379→              <linearGradient id="ecgGradientSubtle" x1="0%" y1="0%" x2="100%" y2="0%">
+   380→   380→                <stop offset="0%" stopColor="#10b981" stopOpacity="0" />
+   381→   381→                <stop offset="50%" stopColor="#06b6d4" stopOpacity="0.6" />
+   382→   382→                <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
+   383→   383→              </linearGradient>
+   384→   384→              <filter id="ecgGlow">
+   385→   385→                <feGaussianBlur stdDeviation="1.5" result="coloredBlur" />
+   386→   386→                <feMerge>
+   387→   387→                  <feMergeNode in="coloredBlur" />
+   388→   388→                  <feMergeNode in="SourceGraphic" />
+   389→   389→                </feMerge>
+   390→   390→              </filter>
+   391→   391→            </defs>
+   392→   392→            {/* Base very faint line */}
+   393→   393→            <path
+   394→   394→              d="M 0 15 L 400 15"
+   395→   395→              fill="none"
+   396→   396→              stroke="#cbd5e1"
+   397→   397→              strokeWidth="0.5"
+   398→   398→              opacity="0.3"
+   399→   399→            />
+   400→   400→            {/* Animated ECG Heartbeat - More subtle */}
+   401→   401→            <path
+   402→   402→              d="M -100 15 L 150 15 L 165 15 L 172 5 L 188 25 L 205 5 L 220 15 L 500 15"
+   403→   403→              fill="none"
+   404→   404→              stroke="url(#ecgGradientSubtle)"
+   405→   405→              strokeWidth="2"
+   406→   406→              strokeLinecap="round"
+   407→   407→              strokeLinejoin="round"
+   408→   408→              filter="url(#ecgGlow)"
+   409→   409→              className="animate-ecgFlow"
+   410→   410→              style={{ strokeDasharray: 600, strokeDashoffset: 600 }}
+   411→   411→            />
+   412→   412→            {/* Subtle glowing dot */}
+   413→   413→            <circle cx="0" cy="15" r="2" fill="#06b6d4" opacity="0.6" className="animate-ecgFlow">
+   414→   414→              <animateMotion dur="4s" repeatCount="indefinite" path="M -100 15 L 150 15 L 165 15 L 172 5 L 188 25 L 205 5 L 220 15 L 500 15" />
+   415→   415→            </circle>
+   416→   416→          </svg>
+   417→   417→        </div>
+   418→   418→      </div>
+   419→   419→
+   420→   420→      {/* Compact Hero - Image 2 style but compact */}
+   421→   421→      <div className="relative z-10 overflow-hidden bg-gradient-to-br from-slate-950/90 via-indigo-950/90 to-purple-950/90 backdrop-blur-xl rounded-[2rem] shadow-2xl animate-fadeSlideUp stagger-2 animate-softGlow">
+   422→   422→        {/* Grid pattern */}
+   423→   423→        <div className="absolute inset-0 opacity-10" style={{
+   424→   424→          backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)',
+   425→   425→          backgroundSize: '40px 40px'
+   426→   426→        }} />
+   427→   427→        {/* Subtle floating particles */}
+   428→   428→        <div className="absolute top-10 left-20 w-1 h-1 bg-cyan-400/30 rounded-full animate-floatParticle" style={{ animationDelay: '0s' }} />
+   429→   429→        <div className="absolute bottom-16 right-32 w-1.5 h-1.5 bg-emerald-400/25 rounded-full animate-floatParticle" style={{ animationDelay: '2s' }} />
+   430→   430→        <div className="absolute top-1/3 right-1/4 w-0.5 h-0.5 bg-purple-400/35 rounded-full animate-floatParticle" style={{ animationDelay: '1s' }} />
+   431→   431→        
+   432→   432→        <div className="relative z-10 p-6 sm:p-8 flex flex-col md:flex-row items-center gap-6">
+   433→   433→          {/* Left content */}
+   434→   434→          <div className="flex-1 min-w-0">
+   435→   435→            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-[10px] font-medium mb-3">
+   436→   436→              <span className="relative flex h-1.5 w-1.5">
+   437→   437→                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+   438→   438→                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+   439→   439→              </span>
+   440→   440→              Ready to help
+   441→   441→            </div>
+   442→   442→            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-2 tracking-tight leading-tight">
+   443→   443→              Your Health,<br />
+   444→   444→              <span className="bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">Clearly Understood</span>
+   445→   445→            </h1>
+   446→   446→            <p className="text-sm text-slate-400 mb-4">AI-assisted insights to support your healthcare journey.</p>
+   447→   447→            
+   448→   448→            {/* Trust indicators */}
+   449→   449→            <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+   450→   450→              <div className="flex items-center gap-1.5">
+   451→   451→                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400"></div>
+   452→   452→                <span className="text-xs text-slate-300 font-medium">AI-assisted, not a diagnosis</span>
+   453→   453→              </div>
+   454→   454→              <div className="hidden sm:block w-px h-3 bg-slate-600"></div>
+   455→   455→              <div className="flex items-center gap-1.5">
+   456→   456→                <div className="w-1.5 h-1.5 rounded-full bg-cyan-400"></div>
+   457→   457→                <span className="text-xs text-slate-300 font-medium">Supports 11 Indian languages</span>
+   458→   458→              </div>
+   459→   459→            </div>
+   460→   460→          </div>
+   461→   461→
+   462→   462→          {/* Right: Rotating Skeleton HUD */}
+   463→   463→          <div className="relative flex-shrink-0">
+   464→   464→            <RotatingSkeletonHUD isUserActive={isUserActive} />
+   465→   465→          </div>
+   466→   466→        </div>
+   467→   467→      </div>
+   468→   468→
+   469→   469→      {/* Bento Grid Features */}
+   470→   470→      <div>
+   471→   471→        <div className="flex items-center justify-between mb-4">
+   472→   472→          <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
+   473→   473→            <Zap className="w-4 h-4 text-amber-500" /> Core Features
+   474→   474→          </h2>
+   475→   475→        </div>
+   476→   476→        
+   477→   477→        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+   478→   478→          {features.map((feature, i) => (
+   479→   479→            <button 
+   480→   480→              key={feature.id} 
+   481→   481→              onClick={() => onNavigate(feature.id)}
+   482→   482→              className={`group relative bg-white/80 backdrop-blur-xl p-4 sm:p-5 rounded-2xl border border-slate-200/50 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 text-left animate-fadeSlideUp stagger-${i + 3}`}
+   483→   483→              style={{ animationDelay: `${i * 0.1}s` }}
+   484→   484→            >
+   485→   485→              {/* Subtle shimmer */}
+   486→   486→              <div className="absolute inset-0 rounded-2xl animate-cardShimmer pointer-events-none opacity-50" />
+   487→   487→              {/* Hover glow */}
+   488→   488→              <div className={`absolute inset-0 rounded-2xl bg-gradient-to-br ${feature.color} opacity-0 group-hover:opacity-5 transition-opacity duration-500`} />
+   489→   489→              
+   490→   490→              <div className="relative z-10">
+   491→   491→                <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br ${feature.color} flex items-center justify-center mb-3 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300 shadow-md`}>
+   492→   492→                  <feature.icon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+   493→   493→                </div>
+   494→   494→                <h3 className="text-sm sm:text-base font-bold text-slate-700 mb-1 group-hover:text-slate-900 transition-colors">{feature.title}</h3>
+   495→   495→                <p className="text-[11px] sm:text-xs text-slate-500 leading-relaxed">{feature.desc}</p>
+   496→   496→                <div className="mt-2 flex items-center text-[10px] sm:text-xs font-semibold text-slate-400 group-hover:text-slate-600 transition-colors">
+   497→   497→                  Open <ArrowRight className="w-3 h-3 ml-1 group-hover:translate-x-0.5 transition-transform" />
+   498→   498→                </div>
+   499→   499→              </div>
+   500→   500→            </button>
+   501→   501→          ))}
+   502→   502→        </div>
+   503→   503→      </div>
+   504→   504→
+   505→   505→      {/* Trust & Values Section */}
+   506→   506→      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 animate-fadeSlideUp stagger-5">
+   507→   507→        <div className="group relative bg-white/80 backdrop-blur-xl border border-slate-200/60 p-4 rounded-2xl hover:shadow-md transition-all duration-300">
+   508→   508→          <div className="flex items-start gap-3">
+   509→   509→            <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl group-hover:scale-110 transition-transform duration-300">
+   510→   510→              <ShieldCheck className="w-5 h-5" />
+   511→   511→            </div>
+   512→   512→            <div>
+   513→   513→              <h3 className="font-semibold text-slate-800 text-sm mb-0.5">Your Privacy Matters</h3>
+   514→   514→              <p className="text-[11px] text-slate-600 leading-relaxed">All data stays on your device. We never sell or share your information.</p>
+   515→   515→            </div>
+   516→   516→          </div>
+   517→   517→        </div>
+   518→   518→        <div className="group relative bg-white/80 backdrop-blur-xl border border-slate-200/60 p-4 rounded-2xl hover:shadow-md transition-all duration-300">
+   519→   519→          <div className="flex items-start gap-3">
+   520→   520→            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl group-hover:scale-110 transition-transform duration-300">
+   521→   521→              <Globe className="w-5 h-5" />
+   522→   522→            </div>
+   523→   523→            <div>
+   524→   524→              <h3 className="font-semibold text-slate-800 text-sm mb-0.5">In Your Language</h3>
+   525→   525→              <p className="text-[11px] text-slate-600 leading-relaxed">Available in 11 Indian languages. Healthcare should be accessible to all.</p>
+   526→   526→            </div>
+   527→   527→          </div>
+   528→   528→        </div>
+   529→   529→        <div className="group relative bg-white/80 backdrop-blur-xl border border-slate-200/60 p-4 rounded-2xl hover:shadow-md transition-all duration-300">
+   530→   530→          <div className="flex items-start gap-3">
+   531→   531→            <div className="p-2 bg-amber-50 text-amber-600 rounded-xl group-hover:scale-110 transition-transform duration-300">
+   532→   532→              <HeartPulse className="w-5 h-5" />
+   533→   533→            </div>
+   534→   534→            <div>
+   535→   535→              <h3 className="font-semibold text-slate-800 text-sm mb-0.5">Human-Centered AI</h3>
+   536→   536→              <p className="text-[11px] text-slate-600 leading-relaxed">AI-assisted insights designed to support, not replace healthcare professionals.</p>
+   537→   537→            </div>
+   538→   538→          </div>
+   539→   539→        </div>
+   540→   540→      </div>
+   541→   541→    </div>
+   542→   542→  );
+   543→   543→};
+   544→   544→

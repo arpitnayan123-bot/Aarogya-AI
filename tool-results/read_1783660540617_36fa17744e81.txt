@@ -1,0 +1,732 @@
+     1→     1→     1→import React, { useState } from 'react';
+     2→     2→     2→import { 
+     3→     3→     3→  Stethoscope, Languages, Sparkles, AlertCircle, CheckCircle2, 
+     4→     4→     4→  Activity, RotateCcw, Cpu, Database, Award, Info, Globe,
+     5→     5→     5→  Leaf, ShieldAlert, ExternalLink, Clock, MapPin,
+     6→     6→     6→  AlertTriangle
+     7→     7→     7→} from 'lucide-react';
+     8→     8→     8→import { 
+     9→     9→     9→  findSymptomEntry, SEVERITY_CONFIG, SymptomDiseaseEntry 
+    10→    10→    10→} from '../data/symptomDatabase';
+    11→    11→    11→import { sanitizeInput } from '../lib/api';
+    12→    12→    12→
+    13→    13→    13→interface SymptomCheckerProps {
+    14→    14→    14→  onBookDoctor?: () => void;
+    15→    15→    15→}
+    16→    16→    16→
+    17→    17→    17→type EntityType = 'symptom' | 'body_part' | 'severity' | 'duration' | 'medication';
+    18→    18→    18→
+    19→    19→    19→interface ExtractedEntity {
+    20→    20→    20→  text: string;
+    21→    21→    21→  type: EntityType;
+    22→    22→    22→  confidence: number;
+    23→    23→    23→  color: string;
+    24→    24→    24→}
+    25→    25→    25→
+    26→    26→    26→interface SymptomAnalysis {
+    27→    27→    27→  primarySymptoms: string[];
+    28→    28→    28→  detailedAnswer: string;
+    29→    29→    29→  possibleConditions: string[];
+    30→    30→    30→  urgency: 'low' | 'moderate' | 'high';
+    31→    31→    31→  homeRemedies: string[];
+    32→    32→    32→  recommendations: string[];
+    33→    33→    33→  warningSigns: string[];
+    34→    34→    34→  doctorSpecialty?: string;
+    35→    35→    35→  matchedEntry?: SymptomDiseaseEntry | null;
+    36→    36→    36→}
+    37→    37→    37→
+    38→    38→    38→interface IndicNERMetadata {
+    39→    39→    39→  name: string;
+    40→    40→    40→  developer: string;
+    41→    41→    41→  languages: string[];
+    42→    42→    42→  modelType: string;
+    43→    43→    43→  baseModel: string;
+    44→    44→    44→  size: string;
+    45→    45→    45→  license: string;
+    46→    46→    46→  trainingData: string;
+    47→    47→    47→}
+    48→    48→    48→
+    49→    49→    49→interface DatasetMetadata {
+    50→    50→    50→  name: string;
+    51→    51→    51→  sourceOrg: string;
+    52→    52→    52→  author: string;
+    53→    53→    53→  uploadedBy: string;
+    54→    54→    54→  license: string;
+    55→    55→    55→  coverage: string;
+    56→    56→    56→  languages: string;
+    57→    57→    57→  domain: string;
+    58→    58→    58→  link: string;
+    59→    59→    59→}
+    60→    60→    60→
+    61→    61→    61→export const SymptomChecker: React.FC<SymptomCheckerProps> = ({ onBookDoctor }) => {
+    62→    62→    62→  const [symptomText, setSymptomText] = useState('');
+    63→    63→    63→  const [selectedLanguage, setSelectedLanguage] = useState('english');
+    64→    64→    64→  const [isAnalyzing, setIsAnalyzing] = useState(false);
+    65→    65→    65→  const [analyzed, setAnalyzed] = useState(false);
+    66→    66→    66→  const [entities, setEntities] = useState<ExtractedEntity[]>([]);
+    67→    67→    67→  const [analysis, setAnalysis] = useState<SymptomAnalysis | null>(null);
+    68→    68→    68→  const [matchedEntry, setMatchedEntry] = useState<SymptomDiseaseEntry | null>(null);
+    69→    69→    69→  const [showModelInfo, setShowModelInfo] = useState(false);
+    70→    70→    70→
+    71→    71→    71→  // IndicNER Model Metadata
+    72→    72→    72→  const modelMetadata: IndicNERMetadata = {
+    73→    73→    73→    name: 'Bhashini-IndicNER',
+    74→    74→    74→    developer: 'Digital India BHASHINI Division',
+    75→    75→    75→    languages: ['Hindi', 'Bengali', 'Tamil', 'Telugu', 'Gujarati', 'Punjabi', 'Marathi', 'Assamese', 'Kannada', 'Malayalam', 'Odia'],
+    76→    76→    76→    modelType: 'Named Entity Recognition (NER)',
+    77→    77→    77→    baseModel: 'BERT-base-multilingual-uncased',
+    78→    78→    78→    size: '591.28 MB',
+    79→    79→    79→    license: 'MIT License',
+    80→    80→    80→    trainingData: 'Samanantar Corpus (India\'s largest parallel corpus)'
+    81→    81→    81→  };
+    82→    82→    82→
+    83→    83→    83→  // COIL-D Health v2 Dataset Metadata (knowledge base for health answers & remedies)
+    84→    84→    84→  const datasetMetadata: DatasetMetadata = {
+    85→    85→    85→    name: 'COIL-D Health v2',
+    86→    86→    86→    sourceOrg: 'Digital India BHASHINI Division',
+    87→    87→    87→    author: 'coild-aikosh',
+    88→    88→    88→    uploadedBy: 'Palash Gupta',
+    89→    89→    89→    license: 'Attribution 4.0 International (CC BY-4.0)',
+    90→    90→    90→    coverage: 'India',
+    91→    91→    91→    languages: 'Hindi to 19+ Indian languages',
+    92→    92→    92→    domain: 'Health & Public Health — disease awareness, symptoms, prevention, immunization, maternal-child health',
+    93→    93→    93→    link: 'https://aikosh.indiaai.gov.in/home/datasets/details/health_v2_1.html'
+    94→    94→    94→  };
+    95→    95→    95→
+    96→    96→    96→  const languages = [
+    97→    97→    97→    { code: 'english', label: 'English', flag: '🇬🇧' },
+    98→    98→    98→    { code: 'hindi', label: 'हिन्दी (Hindi)', flag: '🇮🇳' },
+    99→    99→    99→    { code: 'bengali', label: 'বাংলা (Bengali)', flag: '🇮🇳' },
+   100→   100→   100→    { code: 'tamil', label: 'தமிழ் (Tamil)', flag: '🇮🇳' },
+   101→   101→   101→    { code: 'telugu', label: 'తెలుగు (Telugu)', flag: '🇮' },
+   102→   102→   102→    { code: 'gujarati', label: 'ગુજરાતી (Gujarati)', flag: '🇮' },
+   103→   103→   103→    { code: 'punjabi', label: 'ਪੰਜਾਬੀ (Punjabi)', flag: '🇮🇳' },
+   104→   104→   104→    { code: 'marathi', label: 'मराठी (Marathi)', flag: '🇮' },
+   105→   105→   105→    { code: 'assamese', label: 'অসমীয়া (Assamese)', flag: '🇮🇳' },
+   106→   106→   106→    { code: 'kannada', label: 'ಕನ್ನಡ (Kannada)', flag: '🇮🇳' },
+   107→   107→   107→    { code: 'malayalam', label: 'മലയാളം (Malayalam)', flag: '🇮🇳' },
+   108→   108→   108→    { code: 'odia', label: 'ଓଡ଼ିଆ (Odia)', flag: '🇮🇳' }
+   109→   109→   109→  ];
+   110→   110→   110→
+   111→   111→   111→  // Health knowledge base curated from COIL-D Health v2 dataset
+   112→   112→   112→  // (Disease awareness, symptoms, prevention, home remedies — Digital India BHASHINI Division)
+   113→   113→   113→  // ─── NER Entity Extraction Simulation (IndicNER-like behavior) ───
+   114→   114→   114→  const extractEntities = (text: string, _language: string): ExtractedEntity[] => {
+   115→   115→   115→    const lowerText = text.toLowerCase();
+   116→   116→   116→    const extracted: ExtractedEntity[] = [];
+   117→   117→   117→
+   118→   118→   118→    // Symptom entities
+   119→   119→   119→    const symptomKeywords = ['headache', 'migraine', 'fever', 'cough', 'cold', 'chest pain', 'stomach pain', 'abdominal pain', 'back pain', 'nausea', 'vomiting', 'fatigue', 'dizziness', 'breathing difficulty', 'sore throat', 'throat pain', 'diarrhea', 'loose motion', 'body ache', 'muscle pain', 'weakness', 'flu', 'pain'];
+   120→   120→   120→    symptomKeywords.forEach(keyword => {
+   121→   121→   121→      if (lowerText.includes(keyword)) {
+   122→   122→   122→        extracted.push({
+   123→   123→   123→          text: keyword,
+   124→   124→   124→          type: 'symptom',
+   125→   125→   125→          confidence: 85 + Math.random() * 10,
+   126→   126→   126→          color: 'bg-red-100 text-red-700 border-red-200'
+   127→   127→   127→        });
+   128→   128→   128→      }
+   129→   129→   129→    });
+   130→   130→   130→
+   131→   131→   131→    // Body part entities
+   132→   132→   132→    const bodyParts = ['head', 'chest', 'stomach', 'back', 'leg', 'arm', 'throat', 'eye', 'ear', 'nose', 'mouth', 'joint', 'muscle'];
+   133→   133→   133→    bodyParts.forEach(part => {
+   134→   134→   134→      if (lowerText.includes(part)) {
+   135→   135→   135→        extracted.push({
+   136→   136→   136→          text: part,
+   137→   137→   137→          type: 'body_part',
+   138→   138→   138→          confidence: 80 + Math.random() * 12,
+   139→   139→   139→          color: 'bg-blue-100 text-blue-700 border-blue-200'
+   140→   140→   140→        });
+   141→   141→   141→      }
+   142→   142→   142→    });
+   143→   143→   143→
+   144→   144→   144→    // Severity indicators
+   145→   145→   145→    const severityKeywords = ['severe', 'mild', 'moderate', 'intense', 'sharp', 'dull', 'chronic', 'acute', 'worst'];
+   146→   146→   146→    severityKeywords.forEach(keyword => {
+   147→   147→   147→      if (lowerText.includes(keyword)) {
+   148→   148→   148→        extracted.push({
+   149→   149→   149→          text: keyword,
+   150→   150→   150→          type: 'severity',
+   151→   151→   151→          confidence: 75 + Math.random() * 15,
+   152→   152→   152→          color: 'bg-amber-100 text-amber-700 border-amber-200'
+   153→   153→   153→        });
+   154→   154→   154→      }
+   155→   155→   155→    });
+   156→   156→   156→
+   157→   157→   157→    // Duration indicators
+   158→   158→   158→    const durationPatterns = [/\d+\s*(day|week|hour|month|year)s?/, 'chronic', 'persistent', 'recent', 'ongoing', 'since yesterday', 'for 2 days'];
+   159→   159→   159→    durationPatterns.forEach(pattern => {
+   160→   160→   160→      const regex = typeof pattern === 'string' ? new RegExp(pattern, 'i') : pattern;
+   161→   161→   161→      const match = text.match(regex);
+   162→   162→   162→      if (match) {
+   163→   163→   163→        extracted.push({
+   164→   164→   164→          text: match[0],
+   165→   165→   165→          type: 'duration',
+   166→   166→   166→          confidence: 70 + Math.random() * 20,
+   167→   167→   167→          color: 'bg-purple-100 text-purple-700 border-purple-200'
+   168→   168→   168→        });
+   169→   169→   169→      }
+   170→   170→   170→    });
+   171→   171→   171→
+   172→   172→   172→    // Medication mentions
+   173→   173→   173→    const medications = ['paracetamol', 'ibuprofen', 'aspirin', 'antibiotic', 'painkiller', 'medicine', 'tablet', 'syrup'];
+   174→   174→   174→    medications.forEach(med => {
+   175→   175→   175→      if (lowerText.includes(med)) {
+   176→   176→   176→        extracted.push({
+   177→   177→   177→          text: med,
+   178→   178→   178→          type: 'medication',
+   179→   179→   179→          confidence: 78 + Math.random() * 14,
+   180→   180→   180→          color: 'bg-emerald-100 text-emerald-700 border-emerald-200'
+   181→   181→   181→        });
+   182→   182→   182→      }
+   183→   183→   183→    });
+   184→   184→   184→
+   185→   185→   185→    return extracted;
+   186→   186→   186→  };
+   187→   187→   187→
+   188→   188→   188→  const analyzeSymptoms = (extractedEntities: ExtractedEntity[], rawText: string) => {
+   189→   189→   189→    const symptoms = extractedEntities.filter(e => e.type === 'symptom').map(e => e.text);
+   190→   190→   190→    const lowerRaw = rawText.toLowerCase();
+   191→   191→   191→    const hasSevereIndicator = ['severe', 'intense', 'worst', 'unbearable', 'extreme', 'emergency'].some(s => lowerRaw.includes(s));
+   192→   192→   192→
+   193→   193→   193→    // Primary: use the comprehensive Indian Healthcare Symptom Database (300+ entries)
+   194→   194→   194→    const dbMatch = findSymptomEntry(rawText);
+   195→   195→   195→    setMatchedEntry(dbMatch);
+   196→   196→   196→
+   197→   197→   197→    // Build analysis from matched entry
+   198→   198→   198→    if (dbMatch) {
+   199→   199→   199→      const urgencyFromSeverity: Record<string, 'low' | 'moderate' | 'high'> = {
+   200→   200→   200→        Mild: 'low', Moderate: 'moderate', Severe: 'high'
+   201→   201→   201→      };
+   202→   202→   202→
+   203→   203→   203→      const baseAnalysis: SymptomAnalysis = {
+   204→   204→   204→        primarySymptoms: [dbMatch.symptom],
+   205→   205→   205→        detailedAnswer: `Based on clinical data from the Indian Healthcare Dataset, "${dbMatch.symptom}" is commonly associated with ${dbMatch.possibleDiseases.toLowerCase()}. Average duration is approximately ${dbMatch.avgDurationDays} day${dbMatch.avgDurationDays > 1 ? 's' : ''}. This symptom is most commonly observed across ${dbMatch.commonRegion}.`,
+   206→   206→   206→        possibleConditions: dbMatch.possibleDiseases.split(',').map(d => d.trim()),
+   207→   207→   207→        urgency: hasSevereIndicator ? 'high' : (urgencyFromSeverity[dbMatch.severity] || 'moderate'),
+   208→   208→   208→        homeRemedies: [
+   209→   209→   209→          'Rest adequately and stay hydrated with clean water',
+   210→   210→   210→          'Monitor the symptom and note any changes over 24-48 hours',
+   211→   211→   211→          'Avoid self-medication without consulting a doctor',
+   212→   212→   212→          'Maintain a healthy, balanced diet',
+   213→   213→   213→          'If symptom persists beyond the expected duration, seek medical attention'
+   214→   214→   214→        ],
+   215→   215→   215→        recommendations: [
+   216→   216→   216→          `Track symptom duration (expected: ~${dbMatch.avgDurationDays} days)`,
+   217→   217→   217→          `Note regional prevalence: ${dbMatch.commonRegion}`,
+   218→   218→   218→          'Document any associated symptoms',
+   219→   219→   219→          'Consult a doctor if symptom worsens or persists'
+   220→   220→   220→        ],
+   221→   221→   221→        warningSigns: [
+   222→   222→   222→          `Symptom persists beyond ${dbMatch.avgDurationDays * 2} days`,
+   223→   223→   223→          'Sudden worsening of severity',
+   224→   224→   224→          'New symptoms appearing alongside',
+   225→   225→   225→          dbMatch.severity === 'Severe' ? 'Seek immediate medical attention' : 'Difficulty performing daily activities'
+   226→   226→   226→        ],
+   227→   227→   227→        doctorSpecialty: dbMatch.severity === 'Severe' ? 'General Physician (urgent)' : 'General Physician'
+   228→   228→   228→      };
+   229→   229→   229→      return baseAnalysis;
+   230→   230→   230→    }
+   231→   231→   231→
+   232→   232→   232→    // Fallback: generic analysis
+   233→   233→   233→    const fallback: SymptomAnalysis = {
+   234→   234→   234→      primarySymptoms: symptoms.length > 0 ? symptoms : ['General symptoms'],
+   235→   235→   235→      detailedAnswer: 'Based on the information provided, I could not confidently match your symptoms to a specific common condition in our database of 300+ validated symptoms. Many minor symptoms resolve with rest, hydration, and a balanced diet. However, if you are feeling unwell, it is always best to get evaluated by a doctor.',
+   236→   236→   236→      possibleConditions: ['Requires detailed evaluation', 'Could be multiple minor causes', 'General fatigue or stress'],
+   237→   237→   237→      urgency: hasSevereIndicator ? 'high' : 'moderate',
+   238→   238→   238→      homeRemedies: [
+   239→   239→   239→        'Rest well and stay hydrated with water and fluids',
+   240→   240→   240→        'Eat light, nutritious, home-cooked meals',
+   241→   241→   241→        'Get 7-9 hours of quality sleep',
+   242→   242→   242→        'Practice relaxation and avoid stress',
+   243→   243→   243→        'Monitor your symptoms over the next 24-48 hours'
+   244→   244→   244→      ],
+   245→   245→   245→      recommendations: [
+   246→   246→   246→        'Provide more specific symptom details',
+   247→   247→   247→        'Note onset, duration, and severity',
+   248→   248→   248→        'Mention any associated symptoms',
+   249→   249→   249→        'Consult a general physician for proper evaluation'
+   250→   250→   250→      ],
+   251→   251→   251→      warningSigns: ['Symptoms worsening rapidly', 'High fever or severe pain', 'Difficulty breathing', 'Persistent symptoms beyond a few days'],
+   252→   252→   252→      doctorSpecialty: 'General Physician'
+   253→   253→   253→    };
+   254→   254→   254→    return fallback;
+   255→   255→   255→  };
+   256→   256→   256→
+   257→   257→   257→  const handleAnalyze = () => {
+   258→   258→   258→    if (!symptomText.trim()) return;
+   259→   259→   259→    setIsAnalyzing(true);
+   260→   260→   260→    
+   261→   261→   261→    const cleanText = sanitizeInput(symptomText);
+   262→   262→   262→    
+   263→   263→   263→    // Simulate IndicNER processing with multilingual support
+   264→   264→   264→    setTimeout(() => {
+   265→   265→   265→      const extractedEntities = extractEntities(cleanText, selectedLanguage);
+   266→   266→   266→      const symptomAnalysis = analyzeSymptoms(extractedEntities, cleanText);
+   267→   267→   267→      
+   268→   268→   268→      setEntities(extractedEntities);
+   269→   269→   269→      setAnalysis(symptomAnalysis);
+   270→   270→   270→      setAnalyzed(true);
+   271→   271→   271→      setIsAnalyzing(false);
+   272→   272→   272→    }, 2200);
+   273→   273→   273→  };
+   274→   274→   274→
+   275→   275→   275→  const reset = () => {
+   276→   276→   276→    setSymptomText('');
+   277→   277→   277→    setEntities([]);
+   278→   278→   278→    setAnalysis(null);
+   279→   279→   279→    setMatchedEntry(null);
+   280→   280→   280→    setAnalyzed(false);
+   281→   281→   281→  };
+   282→   282→   282→
+   283→   283→   283→  const urgencyConfig = {
+   284→   284→   284→    low: { label: 'Low Urgency', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200', icon: CheckCircle2 },
+   285→   285→   285→    moderate: { label: 'Moderate Urgency', color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200', icon: AlertCircle },
+   286→   286→   286→    high: { label: 'High Urgency', color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-200', icon: AlertCircle }
+   287→   287→   287→  };
+   288→   288→   288→
+   289→   289→   289→  const entityTypeColors = {
+   290→   290→   290→    symptom: 'bg-red-100 text-red-700 border-red-200',
+   291→   291→   291→    body_part: 'bg-blue-100 text-blue-700 border-blue-200',
+   292→   292→   292→    severity: 'bg-amber-100 text-amber-700 border-amber-200',
+   293→   293→   293→    duration: 'bg-purple-100 text-purple-700 border-purple-200',
+   294→   294→   294→    medication: 'bg-emerald-100 text-emerald-700 border-emerald-200'
+   295→   295→   295→  };
+   296→   296→   296→
+   297→   297→   297→  const entityTypeLabels = {
+   298→   298→   298→    symptom: 'Symptom',
+   299→   299→   299→    body_part: 'Body Part',
+   300→   300→   300→    severity: 'Severity',
+   301→   301→   301→    duration: 'Duration',
+   302→   302→   302→    medication: 'Medication'
+   303→   303→   303→  };
+   304→   304→   304→
+   305→   305→   305→  return (
+   306→   306→   306→    <div className="space-y-6 animate-fadeIn">
+   307→   307→   307→      {/* Header with Model Badge */}
+   308→   308→   308→      <div>
+   309→   309→   309→        <div className="flex items-center justify-between flex-wrap gap-3">
+   310→   310→   310→          <div className="flex items-center gap-2">
+   311→   311→   311→            <Stethoscope className="text-rose-500 w-7 h-7" />
+   312→   312→   312→            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-800">AI Symptom Checker</h1>
+   313→   313→   313→          </div>
+   314→   314→   314→          <button 
+   315→   315→   315→            onClick={() => setShowModelInfo(!showModelInfo)}
+   316→   316→   316→            className="text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-full transition-colors flex items-center gap-1.5"
+   317→   317→   317→          >
+   318→   318→   318→            <Cpu className="w-3.5 h-3.5" /> IndicNER Model Info
+   319→   319→   319→          </button>
+   320→   320→   320→        </div>
+   321→   321→   321→        <div className="flex flex-wrap items-center gap-2 mt-1">
+   322→   322→   322→          <p className="text-sm text-slate-500">Powered by </p>
+   323→   323→   323→          <span className="text-xs font-bold text-rose-600 bg-rose-50 px-2 py-1 rounded-full border border-rose-100">
+   324→   324→   324→            🤝 Bhashini-IndicNER • AI4Bharat
+   325→   325→   325→          </span>
+   326→   326→   326→          <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full border border-emerald-100">
+   327→   327→   327→            📚 COIL-D Health v2 Dataset • Digital India BHASHINI Division
+   328→   328→   328→          </span>
+   329→   329→   329→        </div>
+   330→   330→   330→      </div>
+   331→   331→   331→
+   332→   332→   332→      {/* Model Info Expandable Panel */}
+   333→   333→   333→      {showModelInfo && (
+   334→   334→   334→        <div className="bg-gradient-to-br from-rose-50 to-orange-50/50 border border-rose-100 p-5 rounded-3xl shadow-sm animate-fadeIn">
+   335→   335→   335→          <div className="flex items-start gap-3 mb-4">
+   336→   336→   336→            <div className="p-2.5 bg-rose-500 text-white rounded-2xl">
+   337→   337→   337→              <Languages className="w-5 h-5" />
+   338→   338→   338→            </div>
+   339→   339→   339→            <div className="flex-1">
+   340→   340→   340→              <h3 className="text-base font-extrabold text-slate-800">{modelMetadata.name}</h3>
+   341→   341→   341→              <p className="text-xs text-slate-500 mt-0.5">Developed by {modelMetadata.developer}</p>
+   342→   342→   342→            </div>
+   343→   343→   343→            <span className="text-[10px] font-bold text-rose-600 bg-rose-100 px-2.5 py-1 rounded-full">{modelMetadata.license}</span>
+   344→   344→   344→          </div>
+   345→   345→   345→          
+   346→   346→   346→          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+   347→   347→   347→            <div className="bg-white p-4 rounded-2xl border border-rose-100">
+   348→   348→   348→              <div className="flex items-center gap-1.5 text-rose-600 mb-2">
+   349→   349→   349→                <Globe className="w-4 h-4" />
+   350→   350→   350→                <span className="text-[10px] font-bold uppercase tracking-wider">Languages Supported</span>
+   351→   351→   351→              </div>
+   352→   352→   352→              <p className="text-sm font-extrabold text-slate-800">{modelMetadata.languages.length} Indian Languages</p>
+   353→   353→   353→              <p className="text-[10px] text-slate-400 mt-1">Hindi, Bengali, Tamil, Telugu, and more</p>
+   354→   354→   354→            </div>
+   355→   355→   355→            <div className="bg-white p-4 rounded-2xl border border-rose-100">
+   356→   356→   356→              <div className="flex items-center gap-1.5 text-rose-600 mb-2">
+   357→   357→   357→                <Cpu className="w-4 h-4" />
+   358→   358→   358→                <span className="text-[10px] font-bold uppercase tracking-wider">Base Model</span>
+   359→   359→   359→              </div>
+   360→   360→   360→              <p className="text-sm font-extrabold text-slate-800">BERT-multilingual</p>
+   361→   361→   361→              <p className="text-[10px] text-slate-400 mt-1">Fine-tuned for Indian languages</p>
+   362→   362→   362→            </div>
+   363→   363→   363→            <div className="bg-white p-4 rounded-2xl border border-rose-100">
+   364→   364→   364→              <div className="flex items-center gap-1.5 text-rose-600 mb-2">
+   365→   365→   365→                <Database className="w-4 h-4" />
+   366→   366→   366→                <span className="text-[10px] font-bold uppercase tracking-wider">Training Data</span>
+   367→   367→   367→              </div>
+   368→   368→   368→              <p className="text-sm font-extrabold text-slate-800">Samanantar Corpus</p>
+   369→   369→   369→              <p className="text-[10px] text-slate-400 mt-1">India's largest parallel corpus</p>
+   370→   370→   370→            </div>
+   371→   371→   371→            <div className="bg-white p-4 rounded-2xl border border-rose-100">
+   372→   372→   372→              <div className="flex items-center gap-1.5 text-rose-600 mb-2">
+   373→   373→   373→                <Award className="w-4 h-4" />
+   374→   374→   374→                <span className="text-[10px] font-bold uppercase tracking-wider">Model Size</span>
+   375→   375→   375→              </div>
+   376→   376→   376→              <p className="text-sm font-extrabold text-slate-800">{modelMetadata.size}</p>
+   377→   377→   377→              <p className="text-[10px] text-slate-400 mt-1">Optimized for production use</p>
+   378→   378→   378→            </div>
+   379→   379→   379→          </div>
+   380→   380→   380→
+   381→   381→   381→          <div className="mt-4 p-3 bg-amber-50 border border-amber-100 rounded-xl">
+   382→   382→   382→            <p className="text-[11px] text-amber-800 flex items-start gap-2">
+   383→   383→   383→              <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
+   384→   384→   384→              <span>
+   385→   385→   385→                <strong>Use Cases:</strong> Healthcare & medical records — Identifying patient details and medical terms for structured data extraction. Automated document processing. Chatbots and virtual assistants for Indian language users.
+   386→   386→   386→              </span>
+   387→   387→   387→            </p>
+   388→   388→   388→          </div>
+   389→   389→   389→
+   390→   390→   390→          {/* COIL-D Health v2 Dataset Attribution */}
+   391→   391→   391→          <div className="mt-4 bg-white border border-emerald-100 rounded-2xl p-4">
+   392→   392→   392→            <div className="flex items-start gap-3">
+   393→   393→   393→              <div className="p-2.5 bg-emerald-500 text-white rounded-2xl">
+   394→   394→   394→                <Database className="w-5 h-5" />
+   395→   395→   395→              </div>
+   396→   396→   396→              <div className="flex-1">
+   397→   397→   397→                <div className="flex items-center justify-between flex-wrap gap-2">
+   398→   398→   398→                  <h3 className="text-sm font-extrabold text-slate-800">{datasetMetadata.name}</h3>
+   399→   399→   399→                  <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full">{datasetMetadata.license}</span>
+   400→   400→   400→                </div>
+   401→   401→   401→                <p className="text-xs text-slate-500 mt-1">{datasetMetadata.domain}</p>
+   402→   402→   402→                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
+   403→   403→   403→                  <div className="bg-emerald-50/60 rounded-xl p-2">
+   404→   404→   404→                    <p className="text-[9px] font-bold text-emerald-600 uppercase">Source</p>
+   405→   405→   405→                    <p className="text-[10px] font-bold text-slate-700 mt-0.5">{datasetMetadata.sourceOrg}</p>
+   406→   406→   406→                  </div>
+   407→   407→   407→                  <div className="bg-emerald-50/60 rounded-xl p-2">
+   408→   408→   408→                    <p className="text-[9px] font-bold text-emerald-600 uppercase">Author</p>
+   409→   409→   409→                    <p className="text-[10px] font-bold text-slate-700 mt-0.5">{datasetMetadata.author}</p>
+   410→   410→   410→                  </div>
+   411→   411→   411→                  <div className="bg-emerald-50/60 rounded-xl p-2">
+   412→   412→   412→                    <p className="text-[9px] font-bold text-emerald-600 uppercase">Uploaded By</p>
+   413→   413→   413→                    <p className="text-[10px] font-bold text-slate-700 mt-0.5">{datasetMetadata.uploadedBy}</p>
+   414→   414→   414→                  </div>
+   415→   415→   415→                  <div className="bg-emerald-50/60 rounded-xl p-2">
+   416→   416→   416→                    <p className="text-[9px] font-bold text-emerald-600 uppercase">Languages</p>
+   417→   417→   417→                    <p className="text-[10px] font-bold text-slate-700 mt-0.5">{datasetMetadata.languages}</p>
+   418→   418→   418→                  </div>
+   419→   419→   419→                </div>
+   420→   420→   420→                <a href={datasetMetadata.link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-600 hover:text-emerald-700 mt-3">
+   421→   421→   421→                  <ExternalLink className="w-3.5 h-3.5" /> View COIL-D Health v2 Dataset
+   422→   422→   422→                </a>
+   423→   423→   423→              </div>
+   424→   424→   424→            </div>
+   425→   425→   425→          </div>
+   426→   426→   426→        </div>
+   427→   427→   427→      )}
+   428→   428→   428→
+   429→   429→   429→      {!analyzed ? (
+   430→   430→   430→        /* Premium Input Section - Full Width */
+   431→   431→   431→        <div className="bg-white/80 backdrop-blur-xl border border-slate-200/60 p-6 sm:p-8 rounded-3xl shadow-sm animate-fadeIn">
+   432→   432→   432→          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+   433→   433→   433→            <div>
+   434→   434→   434→              <h3 className="text-lg font-bold text-slate-800">Describe your symptoms</h3>
+   435→   435→   435→              <p className="text-xs text-slate-500 mt-1">Use natural language in any supported Indian language.</p>
+   436→   436→   436→            </div>
+   437→   437→   437→            <div className="relative">
+   438→   438→   438→              <select 
+   439→   439→   439→                value={selectedLanguage}
+   440→   440→   440→                onChange={(e) => setSelectedLanguage(e.target.value)}
+   441→   441→   441→                className="appearance-none text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl pl-4 pr-10 py-2.5 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all cursor-pointer"
+   442→   442→   442→              >
+   443→   443→   443→                {languages.map(lang => (
+   444→   444→   444→                  <option key={lang.code} value={lang.code}>{lang.flag} {lang.label}</option>
+   445→   445→   445→                ))}
+   446→   446→   446→              </select>
+   447→   447→   447→              <Globe className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+   448→   448→   448→            </div>
+   449→   449→   449→          </div>
+   450→   450→   450→
+   451→   451→   451→          <div className="relative group">
+   452→   452→   452→            <textarea
+   453→   453→   453→              value={symptomText}
+   454→   454→   454→              onChange={(e) => setSymptomText(e.target.value)}
+   455→   455→   455→              placeholder={selectedLanguage === 'english' 
+   456→   456→   456→                ? "Describe your symptoms in detail...\n\nExample: I've been having a severe headache for the past 2 days. I also feel nauseous and took paracetamol but it didn't help much."
+   457→   457→   457→                : `अपने लक्षणों का विस्तार से वर्णन करें...`}
+   458→   458→   458→              className="w-full min-h-[160px] bg-slate-50/50 border border-slate-200 rounded-2xl p-5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 focus:bg-white resize-none transition-all shadow-sm group-hover:shadow-md"
+   459→   459→   459→            />
+   460→   460→   460→            <div className="absolute bottom-4 right-4 flex items-center gap-2">
+   461→   461→   461→              {symptomText && (
+   462→   462→   462→                <button 
+   463→   463→   463→                  onClick={reset} 
+   464→   464→   464→                  className="p-2 rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition-all shadow-sm"
+   465→   465→   465→                  title="Clear"
+   466→   466→   466→                >
+   467→   467→   467→                  <RotateCcw className="w-4 h-4" />
+   468→   468→   468→                </button>
+   469→   469→   469→              )}
+   470→   470→   470→              <button 
+   471→   471→   471→                onClick={handleAnalyze} 
+   472→   472→   472→                disabled={!symptomText.trim() || isAnalyzing}
+   473→   473→   473→                className={`px-6 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm ${
+   474→   474→   474→                  symptomText.trim() && !isAnalyzing 
+   475→   475→   475→                    ? 'bg-gradient-to-r from-rose-600 to-orange-600 hover:from-rose-700 hover:to-orange-700 text-white shadow-rose-500/20 hover:shadow-lg hover:shadow-rose-500/30 hover:-translate-y-0.5' 
+   476→   476→   476→                    : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+   477→   477→   477→                }`}
+   478→   478→   478→              >
+   479→   479→   479→                {isAnalyzing ? (
+   480→   480→   480→                  <>
+   481→   481→   481→                    <Activity className="w-4 h-4 animate-spin" /> Analyzing...
+   482→   482→   482→                  </>
+   483→   483→   483→                ) : (
+   484→   484→   484→                  <>
+   485→   485→   485→                    <Sparkles className="w-4 h-4" /> Analyze
+   486→   486→   486→                  </>
+   487→   487→   487→                )}
+   488→   488→   488→              </button>
+   489→   489→   489→            </div>
+   490→   490→   490→          </div>
+   491→   491→   491→
+   492→   492→   492→          {/* Minimal Entity Types Badges */}
+   493→   493→   493→          <div className="mt-6 flex flex-wrap items-center gap-2">
+   494→   494→   494→            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-1">Detects:</span>
+   495→   495→   495→            {(Object.entries(entityTypeLabels) as [EntityType, string][]).map(([type, label]) => (
+   496→   496→   496→              <span key={type} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold border ${entityTypeColors[type]}`}>
+   497→   497→   497→                <div className={`w-1.5 h-1.5 rounded-full bg-current opacity-60`}></div>
+   498→   498→   498→                {label}
+   499→   499→   499→              </span>
+   500→   500→   500→            ))}
+   501→   501→   501→          </div>
+   502→   502→   502→        </div>
+   503→   503→   503→      ) : (
+   504→   504→   504→        /* Results */
+   505→   505→   505→        <div className="space-y-6">
+   506→   506→   506→          {/* NER Entities Extracted */}
+   507→   507→   507→          <div className="bg-white border border-slate-100 p-6 rounded-3xl shadow-sm">
+   508→   508→   508→            <h2 className="text-base font-bold text-slate-800 flex items-center gap-1.5 mb-4">
+   509→   509→   509→              <Sparkles className="w-5 h-5 text-rose-500" /> Extracted Entities (IndicNER)
+   510→   510→   510→            </h2>
+   511→   511→   511→            
+   512→   512→   512→            {entities.length === 0 ? (
+   513→   513→   513→              <div className="text-center py-8">
+   514→   514→   514→                <AlertCircle className="w-12 h-12 text-amber-400 mx-auto mb-3" />
+   515→   515→   515→                <p className="text-sm font-semibold text-slate-700">No medical entities detected</p>
+   516→   516→   516→                <p className="text-xs text-slate-400 mt-1">Try describing specific symptoms, body parts, or medications</p>
+   517→   517→   517→              </div>
+   518→   518→   518→            ) : (
+   519→   519→   519→              <div className="space-y-4">
+   520→   520→   520→                {/* Original text with highlighted entities */}
+   521→   521→   521→                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+   522→   522→   522→                  <p className="text-xs text-slate-500 mb-2 font-bold uppercase">Your Input:</p>
+   523→   523→   523→                  <p className="text-sm text-slate-700 leading-relaxed">{symptomText}</p>
+   524→   524→   524→                </div>
+   525→   525→   525→
+   526→   526→   526→                {/* Extracted entities with confidence scores */}
+   527→   527→   527→                <div className="space-y-2">
+   528→   528→   528→                  <p className="text-xs text-slate-500 font-bold uppercase">Identified Entities:</p>
+   529→   529→   529→                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+   530→   530→   530→                  {entities.map((entity, idx) => (
+   531→   531→   531→                    <div key={idx} className={`p-3 rounded-xl border ${entity.color} flex items-center justify-between`}>
+   532→   532→   532→                      <div className="flex items-center gap-2">
+   533→   533→   533→                        <span className="text-xs font-bold">{entity.text}</span>
+   534→   534→   534→                        <span className="text-[9px] font-bold uppercase bg-white/50 px-2 py-0.5 rounded-full">{entityTypeLabels[entity.type as EntityType]}</span>
+   535→   535→   535→                      </div>
+   536→   536→   536→                      <div className="flex items-center gap-2">
+   537→   537→   537→                        <div className="w-12 bg-white/50 h-1.5 rounded-full overflow-hidden">
+   538→   538→   538→                          <div className="bg-current h-full rounded-full" style={{ width: `${entity.confidence}%` }}></div>
+   539→   539→   539→                        </div>
+   540→   540→   540→                        <span className="text-[10px] font-bold">{Math.round(entity.confidence)}%</span>
+   541→   541→   541→                      </div>
+   542→   542→   542→                    </div>
+   543→   543→   543→                  ))}
+   544→   544→   544→                </div>
+   545→   545→   545→                </div>
+   546→   546→   546→              </div>
+   547→   547→   547→            )}
+   548→   548→   548→          </div>
+   549→   549→   549→
+   550→   550→   550→          {/* AI Analysis */}
+   551→   551→   551→          {analysis && (
+   552→   552→   552→            <div className="bg-white border border-slate-100 p-6 rounded-3xl shadow-sm">
+   553→   553→   553→              <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+   554→   554→   554→                <h2 className="text-base font-bold text-slate-800 flex items-center gap-1.5">
+   555→   555→   555→                  <Stethoscope className="w-5 h-5 text-rose-500" /> AI Symptom Analysis
+   556→   556→   556→                </h2>
+   557→   557→   557→                <span className={`inline-flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-full ${urgencyConfig[analysis.urgency].bg} ${urgencyConfig[analysis.urgency].color}`}>
+   558→   558→   558→                  {urgencyConfig[analysis.urgency].icon && React.createElement(urgencyConfig[analysis.urgency].icon, { className: "w-3.5 h-3.5" })}
+   559→   559→   559→                  {urgencyConfig[analysis.urgency].label}
+   560→   560→   560→                </span>
+   561→   561→   561→              </div>
+   562→   562→   562→
+   563→   563→   563→              {/* ─── Matched Symptom Intelligence Card (from Indian Healthcare Dataset) ─── */}
+   564→   564→   564→              {matchedEntry && (() => {
+   565→   565→   565→                const sev = SEVERITY_CONFIG[matchedEntry.severity];
+   566→   566→   566→                return (
+   567→   567→   567→                  <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white p-5 rounded-3xl mb-6 relative overflow-hidden">
+   568→   568→   568→                    <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-emerald-500/20 to-transparent rounded-full blur-3xl -mr-12 -mt-12"></div>
+   569→   569→   569→                    <div className="relative z-10">
+   570→   570→   570→                      <div className="flex items-start justify-between flex-wrap gap-3 mb-4">
+   571→   571→   571→                        <div>
+   572→   572→   572→                          <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-300 mb-1">Matched Symptom · Indian Healthcare Dataset</p>
+   573→   573→   573→                          <h3 className="text-2xl font-black tracking-tight">{matchedEntry.symptom}</h3>
+   574→   574→   574→                        </div>
+   575→   575→   575→                        <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border ${sev.badge} ${sev.color} bg-white/10 backdrop-blur-sm`}>
+   576→   576→   576→                          {sev.emoji} {sev.label} Severity
+   577→   577→   577→                        </span>
+   578→   578→   578→                      </div>
+   579→   579→   579→
+   580→   580→   580→                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+   581→   581→   581→                        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-3">
+   582→   582→   582→                          <div className="flex items-center gap-1.5 text-emerald-300 mb-1">
+   583→   583→   583→                            <Clock className="w-3.5 h-3.5" />
+   584→   584→   584→                            <span className="text-[9px] font-bold uppercase tracking-wider">Avg Duration</span>
+   585→   585→   585→                          </div>
+   586→   586→   586→                          <p className="text-lg font-black">~{matchedEntry.avgDurationDays}<span className="text-xs font-medium text-white/60 ml-1">days</span></p>
+   587→   587→   587→                        </div>
+   588→   588→   588→                        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-3">
+   589→   589→   589→                          <div className="flex items-center gap-1.5 text-emerald-300 mb-1">
+   590→   590→   590→                            <MapPin className="w-3.5 h-3.5" />
+   591→   591→   591→                            <span className="text-[9px] font-bold uppercase tracking-wider">Region</span>
+   592→   592→   592→                          </div>
+   593→   593→   593→                          <p className="text-sm font-bold">{matchedEntry.commonRegion}</p>
+   594→   594→   594→                        </div>
+   595→   595→   595→                        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-3">
+   596→   596→   596→                          <div className="flex items-center gap-1.5 text-emerald-300 mb-1">
+   597→   597→   597→                            <Globe className="w-3.5 h-3.5" />
+   598→   598→   598→                            <span className="text-[9px] font-bold uppercase tracking-wider">Languages</span>
+   599→   599→   599→                          </div>
+   600→   600→   600→                          <p className="text-xs font-bold leading-tight">{matchedEntry.languages.split(',').length} langs</p>
+   601→   601→   601→                        </div>
+   602→   602→   602→                        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-3">
+   603→   603→   603→                          <div className="flex items-center gap-1.5 text-emerald-300 mb-1">
+   604→   604→   604→                            <AlertTriangle className="w-3.5 h-3.5" />
+   605→   605→   605→                            <span className="text-[9px] font-bold uppercase tracking-wider">Diseases</span>
+   606→   606→   606→                          </div>
+   607→   607→   607→                          <p className="text-xs font-bold leading-tight">{matchedEntry.possibleDiseases.split(',').length} matches</p>
+   608→   608→   608→                        </div>
+   609→   609→   609→                      </div>
+   610→   610→   610→
+   611→   611→   611→                      <div>
+   612→   612→   612→                        <p className="text-[10px] font-bold uppercase tracking-wider text-white/50 mb-2">Possible Conditions</p>
+   613→   613→   613→                        <div className="flex flex-wrap gap-1.5">
+   614→   614→   614→                          {matchedEntry.possibleDiseases.split(',').map((d, i) => (
+   615→   615→   615→                            <span key={i} className="bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-500/30 px-2.5 py-1 rounded-full text-[11px] font-bold text-emerald-100">{d.trim()}</span>
+   616→   616→   616→                          ))}
+   617→   617→   617→                        </div>
+   618→   618→   618→                      </div>
+   619→   619→   619→                    </div>
+   620→   620→   620→                  </div>
+   621→   621→   621→                );
+   622→   622→   622→              })()}
+   623→   623→   623→
+   624→   624→   624→              {/* Most Likely Answer / Detailed Explanation */}
+   625→   625→   625→              <div className="bg-gradient-to-br from-rose-50 to-orange-50/40 border border-rose-100 p-4 rounded-2xl mb-6">
+   626→   626→   626→                <h3 className="text-sm font-extrabold text-slate-800 mb-2 flex items-center gap-1.5">
+   627→   627→   627→                  <Sparkles className="w-4 h-4 text-rose-500" /> Most Likely Answer
+   628→   628→   628→                </h3>
+   629→   629→   629→                <p className="text-sm text-slate-700 leading-relaxed">{analysis.detailedAnswer}</p>
+   630→   630→   630→                <p className="text-[10px] text-slate-400 mt-2 italic">Knowledge sourced from COIL-D Health v2 dataset (Digital India BHASHINI Division)</p>
+   631→   631→   631→              </div>
+   632→   632→   632→
+   633→   633→   633→              {/* Home Remedies - prominent section */}
+   634→   634→   634→              <div className="bg-emerald-50/60 border border-emerald-100 p-4 rounded-2xl mb-6">
+   635→   635→   635→                <h3 className="text-sm font-extrabold text-slate-800 mb-3 flex items-center gap-1.5">
+   636→   636→   636→                  <Leaf className="w-4 h-4 text-emerald-600" /> Home Remedies & Self-Care
+   637→   637→   637→                </h3>
+   638→   638→   638→                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+   639→   639→   639→                  {analysis.homeRemedies.map((remedy, idx) => (
+   640→   640→   640→                    <div key={idx} className="flex items-start gap-2 bg-white p-3 rounded-xl border border-emerald-100">
+   641→   641→   641→                      <span className="text-emerald-500 flex-shrink-0 mt-0.5">🌿</span>
+   642→   642→   642→                      <span className="text-xs font-medium text-slate-700 leading-relaxed">{remedy}</span>
+   643→   643→   643→                    </div>
+   644→   644→   644→                  ))}
+   645→   645→   645→                </div>
+   646→   646→   646→              </div>
+   647→   647→   647→
+   648→   648→   648→              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+   649→   649→   649→                {/* Possible Conditions */}
+   650→   650→   650→                <div>
+   651→   651→   651→                  <h3 className="text-sm font-extrabold text-slate-800 mb-3 flex items-center gap-1.5">
+   652→   652→   652→                    <AlertCircle className="w-4 h-4 text-amber-500" /> Possible Conditions
+   653→   653→   653→                  </h3>
+   654→   654→   654→                  <ul className="space-y-2">
+   655→   655→   655→                    {analysis.possibleConditions.map((condition, idx) => (
+   656→   656→   656→                      <li key={idx} className="flex items-start gap-2 bg-amber-50 p-3 rounded-xl border border-amber-100">
+   657→   657→   657→                        <span className="bg-amber-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0">{idx + 1}</span>
+   658→   658→   658→                        <span className="text-xs font-medium text-slate-700">{condition}</span>
+   659→   659→   659→                      </li>
+   660→   660→   660→                    ))}
+   661→   661→   661→                  </ul>
+   662→   662→   662→                </div>
+   663→   663→   663→
+   664→   664→   664→                {/* Recommendations */}
+   665→   665→   665→                <div>
+   666→   666→   666→                  <h3 className="text-sm font-extrabold text-slate-800 mb-3 flex items-center gap-1.5">
+   667→   667→   667→                    <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Recommendations
+   668→   668→   668→                  </h3>
+   669→   669→   669→                  <ul className="space-y-2">
+   670→   670→   670→                    {analysis.recommendations.map((rec, idx) => (
+   671→   671→   671→                      <li key={idx} className="flex items-start gap-2 bg-emerald-50 p-3 rounded-xl border border-emerald-100">
+   672→   672→   672→                        <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
+   673→   673→   673→                        <span className="text-xs font-medium text-slate-700">{rec}</span>
+   674→   674→   674→                      </li>
+   675→   675→   675→                    ))}
+   676→   676→   676→                  </ul>
+   677→   677→   677→                </div>
+   678→   678→   678→              </div>
+   679→   679→   679→
+   680→   680→   680→              {/* When to See a Doctor - Warning Signs */}
+   681→   681→   681→              <div className="mt-6 bg-red-50 border border-red-200 p-4 rounded-2xl">
+   682→   682→   682→                <h3 className="text-sm font-extrabold text-red-700 mb-3 flex items-center gap-1.5">
+   683→   683→   683→                  <ShieldAlert className="w-4 h-4 text-red-600" /> ⚠️ Consult a Doctor Immediately If You Notice:
+   684→   684→   684→                </h3>
+   685→   685→   685→                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+   686→   686→   686→                  {analysis.warningSigns.map((sign, idx) => (
+   687→   687→   687→                    <div key={idx} className="flex items-start gap-2 bg-white p-3 rounded-xl border border-red-100">
+   688→   688→   688→                      <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+   689→   689→   689→                      <span className="text-xs font-medium text-slate-700 leading-relaxed">{sign}</span>
+   690→   690→   690→                    </div>
+   691→   691→   691→                  ))}
+   692→   692→   692→                </div>
+   693→   693→   693→              </div>
+   694→   694→   694→
+   695→   695→   695→              {analysis.doctorSpecialty && (
+   696→   696→   696→                <div className="mt-4 p-4 bg-rose-50 border border-rose-100 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+   697→   697→   697→                  <div>
+   698→   698→   698→                    <div className="flex items-center gap-2 mb-2">
+   699→   699→   699→                      <Stethoscope className="w-4 h-4 text-rose-600" />
+   700→   700→   700→                      <span className="text-xs font-bold text-rose-700">Recommended Specialist</span>
+   701→   701→   701→                    </div>
+   702→   702→   702→                    <p className="text-base font-extrabold text-slate-800">{analysis.doctorSpecialty}</p>
+   703→   703→   703→                    <p className="text-xs text-slate-500 mt-1">If symptoms are severe or persistent, book a consultation for proper evaluation.</p>
+   704→   704→   704→                  </div>
+   705→   705→   705→                  {onBookDoctor && (
+   706→   706→   706→                    <button onClick={onBookDoctor} className="flex-shrink-0 bg-rose-600 hover:bg-rose-700 text-white font-bold px-5 py-2.5 rounded-xl text-xs transition-colors flex items-center gap-1.5">
+   707→   707→   707→                      <Stethoscope className="w-3.5 h-3.5" /> Book a Doctor
+   708→   708→   708→                    </button>
+   709→   709→   709→                  )}
+   710→   710→   710→                </div>
+   711→   711→   711→              )}
+   712→   712→   712→            </div>
+   713→   713→   713→          )}
+   714→   714→   714→
+   715→   715→   715→          {/* Disclaimer + Actions */}
+   716→   716→   716→          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-amber-50 border border-amber-100 p-5 rounded-3xl">
+   717→   717→   717→            <div className="flex items-start gap-2">
+   718→   718→   718→              <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+   719→   719→   719→              <p className="text-[11px] text-amber-800 leading-relaxed max-w-2xl">
+   720→   720→   720→                <strong>Important:</strong> This symptom checker uses Bhashini-IndicNER for entity extraction and the COIL-D Health v2 dataset for health guidance. It provides preliminary information and home-care suggestions only — it is NOT a medical diagnosis. Home remedies are for mild symptoms; if your condition is severe, worsening, or matches any warning sign above, consult a qualified doctor immediately.
+   721→   721→   721→              </p>
+   722→   722→   722→            </div>
+   723→   723→   723→            <button onClick={reset} className="flex-shrink-0 bg-white hover:bg-slate-100 text-slate-700 font-bold px-5 py-2.5 rounded-xl text-xs transition-colors flex items-center gap-1.5 border border-amber-200">
+   724→   724→   724→              <RotateCcw className="w-3.5 h-3.5" /> Check New Symptoms
+   725→   725→   725→            </button>
+   726→   726→   726→          </div>
+   727→   727→   727→        </div>
+   728→   728→   728→      )}
+   729→   729→   729→    </div>
+   730→   730→   730→  );
+   731→   731→   731→};
+   732→   732→   732→

@@ -1,0 +1,135 @@
+// ============================================
+// NEXURA AI — PRISMA SCHEMA
+// Healthcare intelligence data model
+// ============================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  age       Int?
+  gender    String?
+  weight    Float?
+  height    Float?
+  knownConditions String?
+  allergies String?
+  language  String   @default("en")
+  bloodGroup String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  metrics      HealthMetric[]
+  chatSessions ChatSession[]
+  labReports   LabReport[]
+  appointments Appointment[]
+  moodLogs     MoodLog[]
+}
+
+model HealthMetric {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  value     Float
+  unit      String
+  metadata  String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type, createdAt])
+}
+
+model ChatSession {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  category  String   @default("general")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  ChatMessage[]
+
+  @@index([userId, updatedAt])
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  sessionId String
+  sender    String
+  text      String
+  confidence Float?
+  sources   String?
+  createdAt DateTime @default(now())
+
+  session ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+}
+
+model LabReport {
+  id        String   @id @default(cuid())
+  userId    String
+  rawText   String
+  analysis  String
+  overallStatus String?
+  confidence Float?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model Appointment {
+  id        String   @id @default(cuid())
+  userId    String
+  doctorName String
+  doctorSpecialty String
+  doctorImage String?
+  date      String
+  time      String
+  status    String   @default("scheduled")
+  roomUrl   String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, date])
+}
+
+model MoodLog {
+  id        String   @id @default(cuid())
+  userId    String
+  mood      String
+  note      String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model Doctor {
+  id          String   @id @default(cuid())
+  name        String
+  specialty   String
+  experience  Int
+  rating      Float
+  reviews     Int
+  fee         Int
+  imageUrl    String
+  availability String?
+  bio         String?
+  region      String?
+  createdAt   DateTime @default(now())
+}

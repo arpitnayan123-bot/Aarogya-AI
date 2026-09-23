@@ -1,0 +1,757 @@
+     1→import { useState, useRef, useEffect } from 'react';
+     2→import {
+     3→  FileText, Sparkles, CheckCircle2,
+     4→  Upload, ChevronDown, ChevronUp, Search, X,
+     5→  Activity, Sun, TrendingUp,
+     6→  Trash2, History, Loader2, Volume2, VolumeX, Share2, Camera, AlertOctagon, Phone, TrendingDown, Minus, Stethoscope, ShieldAlert, HeartPulse
+     7→} from 'lucide-react';
+     8→import { api, sanitizeInput } from '../lib/api';
+     9→import { HeaderBackground } from './ui/HeaderBackground';
+    10→
+    11→// ============================================
+    12→// TYPES
+    13→// ============================================
+    14→
+    15→interface BiomarkerItem {
+    16→  name_en: string;
+    17→  name_hi: string;
+    18→  value: number;
+    19→  unit: string;
+    20→  normal_range: string;
+    21→  status: 'normal' | 'borderline' | 'abnormal';
+    22→  explanation_en: string;
+    23→  explanation_hi: string;
+    24→  causes_en: string;
+    25→  causes_hi: string;
+    26→  action_en: string;
+    27→  action_hi: string;
+    28→}
+    29→
+    30→interface CriticalAlert {
+    31→  test_name_en: string;
+    32→  test_name_hi: string;
+    33→  value: number;
+    34→  unit: string;
+    35→  normal_range: string;
+    36→  danger_level: string;
+    37→  emergency_action_en: string;
+    38→  emergency_action_hi: string;
+    39→}
+    40→
+    41→interface LabAnalysis {
+    42→  critical_alerts: CriticalAlert[];
+    43→  categories: Record<string, BiomarkerItem[]>;
+    44→  recommended_specialist: { type: string; urgency: string; reason_en: string; reason_hi: string };
+    45→  summary_en: string;
+    46→  summary_hi: string;
+    47→  organ_system_summary_en?: string;
+    48→  organ_system_summary_hi?: string;
+    49→  disease_risk_assessment_en?: string;
+    50→  disease_risk_assessment_hi?: string;
+    51→  diet_lifestyle_en?: string;
+    52→  diet_lifestyle_hi?: string;
+    53→  follow_up_plan_en?: string;
+    54→  follow_up_plan_hi?: string;
+    55→  raw_response?: string;
+    56→  _fallback?: boolean;
+    57→}
+    58→
+    59→interface SavedReport {
+    60→  id: string;
+    61→  date: string;
+    62→  labName: string;
+    63→  patientAge: number;
+    64→  patientGender: string;
+    65→  analysis: LabAnalysis;
+    66→  sourceText: string;
+    67→  model: string;
+    68→}
+    69→
+    70→// ============================================
+    71→// HELPERS
+    72→// ============================================
+    73→
+    74→const isHigherBetter = (name: string) => {
+    75→  const goodHigh = ['HDL', 'Hemoglobin', 'Vitamin D', 'Vitamin B12', 'Ferritin', 'Platelets', 'WBC', 'RBC', 'Hematocrit'];
+    76→  return goodHigh.some(g => name.toLowerCase().includes(g.toLowerCase()));
+    77→};
+    78→
+    79→const speakText = (text: string) => {
+    80→  if ('speechSynthesis' in window) {
+    81→    window.speechSynthesis.cancel();
+    82→    const utterance = new SpeechSynthesisUtterance(text);
+    83→    utterance.lang = 'hi-IN';
+    84→    utterance.rate = 0.9;
+    85→    window.speechSynthesis.speak(utterance);
+    86→    return true;
+    87→  }
+    88→  return false;
+    89→};
+    90→
+    91→const shareToWhatsApp = (analysis: LabAnalysis, age: number, gender: string) => {
+    92→  let text = `*Aarogya AI Lab Report Summary*\nAge: ${age}, Gender: ${gender}\n\n`;
+    93→  if (analysis.critical_alerts.length > 0) {
+    94→    text += `🚨 *CRITICAL ALERTS*\n`;
+    95→    analysis.critical_alerts.forEach(a => {
+    96→      text += `- ${a.test_name_en}: ${a.value} ${a.unit} (Normal: ${a.normal_range}). ${a.emergency_action_en}\n`;
+    97→    });
+    98→    text += `\n`;
+    99→  }
+   100→  text += `*Summary*: ${analysis.summary_en}\n\n`;
+   101→  text += `*Specialist*: ${analysis.recommended_specialist.type} (${analysis.recommended_specialist.urgency})\n`;
+   102→  text += `Reason: ${analysis.recommended_specialist.reason_en}\n\n`;
+   103→  text += `⚠️ This is an AI analysis. Please consult a doctor.`;
+   104→  
+   105→  const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+   106→  window.open(url, '_blank');
+   107→};
+   108→
+   109→// ============================================
+   110→// MAIN COMPONENT
+   111→// ============================================
+   112→
+   113→export const ReportAnalyzer: React.FC = () => {
+   114→  const [inputMode, setInputMode] = useState<'text' | 'file' | 'camera'>('text');
+   115→  const [reportText, setReportText] = useState('');
+   116→  const [fileName, setFileName] = useState('');
+   117→  const [imagePreview, setImagePreview] = useState<string | null>(null);
+   118→  const [isAnalyzing, setIsAnalyzing] = useState(false);
+   119→  const [analysis, setAnalysis] = useState<LabAnalysis | null>(null);
+   120→  const [gender, setGender] = useState<'male' | 'female'>('male');
+   121→  const [age, setAge] = useState(30);
+   122→  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+   123→  const [analysisError, setAnalysisError] = useState<string | null>(null);
+   124→  const [processingStep, setProcessingStep] = useState(0);
+   125→  const [labName, setLabName] = useState('');
+   126→  const [savedReports, setSavedReports] = useState<SavedReport[]>([]);
+   127→  const [showHistory, setShowHistory] = useState(false);
+   128→  const [isSpeaking, setIsSpeaking] = useState(false);
+   129→  const [autoAnalyze, setAutoAnalyze] = useState(false);
+   130→
+   131→  const fileInputRef = useRef<HTMLInputElement>(null);
+   132→  const cameraInputRef = useRef<HTMLInputElement>(null);
+   133→
+   134→  // Load PDF.js library
+   135→  useEffect(() => {
+   136→    if (typeof window !== 'undefined' && !(window as any).pdfjsLib) {
+   137→      const script = document.createElement('script');
+   138→      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+   139→      script.onload = () => {
+   140→        (window as any).pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+   141→      };
+   142→      document.head.appendChild(script);
+   143→    }
+   144→  }, []);
+   145→
+   146→  // Auto-trigger analysis when PDF text is extracted
+   147→  useEffect(() => {
+   148→    if (autoAnalyze && reportText) {
+   149→      setAutoAnalyze(false);
+   150→      analyzeReport();
+   151→    }
+   152→  }, [reportText, autoAnalyze]);
+   153→
+   154→  // Data Privacy Cleanup
+   155→  useEffect(() => {
+   156→    return () => {
+   157→      setReportText('');
+   158→      setAnalysis(null);
+   159→      setImagePreview(null);
+   160→      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+   161→    };
+   162→  }, []);
+   163→
+   164→  // Privacy-First: History is only stored during the current session.
+   165→  // Lab reports contain highly sensitive clinical data and are cleared on refresh.
+   166→  useEffect(() => {
+   167→    // No persistent storage for lab reports.
+   168→  }, []);
+   169→
+   170→  // ============================================
+   171→  // UPLOAD HANDLERS
+   172→  // ============================================
+   173→
+   174→  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+   175→    const file = e.target.files?.[0];
+   176→    if (!file) return;
+   177→    setFileName(file.name);
+   178→    setAnalysisError(null);
+   179→    setImagePreview(null);
+   180→    setInputMode('file');
+   181→
+   182→    const ext = file.name.split('.').pop()?.toLowerCase();
+   183→    if (['jpg', 'jpeg', 'png', 'webp'].includes(ext || '')) {
+   184→      const reader = new FileReader();
+   185→      reader.onload = (ev) => setImagePreview(ev.target?.result as string);
+   186→      reader.readAsDataURL(file);
+   187→      setReportText(`[Image uploaded: ${file.name}]`);
+   188→    } else if (ext === 'pdf') {
+   189→      setIsAnalyzing(true);
+   190→      setProcessingStep(0); // "Reading PDF..."
+   191→      try {
+   192→        if (!(window as any).pdfjsLib) {
+   193→          throw new Error("PDF library not loaded yet. Please wait a moment and try again.");
+   194→        }
+   195→        const arrayBuffer = await file.arrayBuffer();
+   196→        const pdf = await (window as any).pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+   197→        
+   198→        let fullText = '';
+   199→        for (let i = 1; i <= pdf.numPages; i++) {
+   200→          const page = await pdf.getPage(i);
+   201→          const textContent = await page.getTextContent();
+   202→          const pageText = textContent.items.map((item: any) => item.str).join(' ');
+   203→          fullText += pageText + '\n';
+   204→        }
+   205→
+   206→        if (fullText.trim().length < 50) {
+   207→          setAnalysisError('Could not read this PDF automatically. Please copy-paste the report text in the text box below for instant analysis.');
+   208→          setIsAnalyzing(false);
+   209→          return;
+   210→        }
+   211→
+   212→        setReportText(fullText);
+   213→        setAutoAnalyze(true); // Triggers analysis via useEffect
+   214→        
+   215→      } catch (error) {
+   216→        console.error('PDF extraction error:', error);
+   217→        setAnalysisError('Could not read this PDF automatically. Please copy-paste the report text in the text box below for instant analysis.');
+   218→        setIsAnalyzing(false);
+   219→      }
+   220→    } else {
+   221→      const reader = new FileReader();
+   222→      reader.onload = (ev) => setReportText(ev.target?.result as string || '');
+   223→      reader.readAsText(file);
+   224→    }
+   225→  };
+   226→
+   227→  const handleCameraCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+   228→    const file = e.target.files?.[0];
+   229→    if (!file) return;
+   230→    setFileName(`Camera Capture - ${new Date().toLocaleTimeString()}`);
+   231→    setInputMode('camera');
+   232→    const reader = new FileReader();
+   233→    reader.onload = (ev) => setImagePreview(ev.target?.result as string);
+   234→    reader.readAsDataURL(file);
+   235→    setReportText(`[Camera Image Captured]`);
+   236→  };
+   237→
+   238→  // ============================================
+   239→  // DEMO & ANALYSIS
+   240→  // ============================================
+   241→
+   242→  const loadDemoReport = () => {
+   243→    setLabName('Dr Lal PathLabs');
+   244→    setReportText(`
+   245→Complete Blood Count: Hemoglobin: 11.2 g/dL, WBC: 7200, Platelets: 245000
+   246→Sugar: Fasting Glucose: 108 mg/dL, HbA1c: 5.9%
+   247→Lipids: Total Cholesterol: 224 mg/dL, LDL: 152 mg/dL, HDL: 38 mg/dL, Triglycerides: 168 mg/dL
+   248→Liver: SGPT (ALT): 32 IU/L, SGOT (AST): 28 IU/L, Bilirubin: 0.8 mg/dL
+   249→Kidney: Creatinine: 0.9 mg/dL, Urea: 28 mg/dL, eGFR: 95
+   250→Thyroid: TSH: 3.2 mIU/L
+   251→Vitamins: Vitamin D: 18 ng/mL, Vitamin B12: 285 pg/mL, Ferritin: 45 ng/mL
+   252→Inflammation: hs-CRP: 3.8 mg/L
+   253→    `.trim());
+   254→    setFileName('Demo_Report.txt');
+   255→    setInputMode('text');
+   256→    setImagePreview(null);
+   257→  };
+   258→
+   259→  const analyzeReport = async () => {
+   260→    if (!reportText.trim() && !imagePreview) {
+   261→      setAnalysisError('Please paste text, upload a file, or take a photo first.');
+   262→      return;
+   263→    }
+   264→
+   265→    setIsAnalyzing(true);
+   266→    setAnalysisError(null);
+   267→    setProcessingStep(0);
+   268→    const steps = ['Extracting biomarkers...', 'Analyzing with AI...', 'Cross-referencing Indian ranges...', 'Generating bilingual insights...', 'Building recommendations...'];
+   269→    const interval = setInterval(() => setProcessingStep(p => Math.min(p + 1, steps.length - 1)), 500);
+   270→
+   271→    try {
+   272→      let result;
+   273→      if (imagePreview && inputMode !== 'text') {
+   274→        // Extract base64 from data URL
+   275→        const base64 = imagePreview.split(',')[1];
+   276→        result = await api.analyzeLabReportFile('image/jpeg', base64, { labName: sanitizeInput(labName), age, gender });
+   277→      } else {
+   278→        result = await api.analyzeLabReport(sanitizeInput(reportText), { labName: sanitizeInput(labName), age, gender });
+   279→      }
+   280→
+   281→      clearInterval(interval);
+   282→      if (!result.success || !result.data) throw new Error('Analysis failed');
+   283→
+   284→      const parsed: LabAnalysis = result.data;
+   285→      setAnalysis(parsed);
+   286→
+   287→      // Save to history
+   288→      const saved: SavedReport = {
+   289→        id: `report-${Date.now()}`,
+   290→        date: new Date().toISOString(),
+   291→        labName: labName || 'Unknown Lab',
+   292→        patientAge: age,
+   293→        patientGender: gender,
+   294→        analysis: parsed,
+   295→        sourceText: reportText.substring(0, 200),
+   296→        model: result.meta?.model || 'gemini-2.0-flash',
+   297→      };
+   298→      setSavedReports(prev => [saved, ...prev].slice(0, 10));
+   299→    } catch (err) {
+   300→      clearInterval(interval);
+   301→      setAnalysisError(err instanceof Error ? err.message : 'Analysis failed. Check connection.');
+   302→    } finally {
+   303→      setIsAnalyzing(false);
+   304→      setProcessingStep(0);
+   305→    }
+   306→  };
+   307→
+   308→  const resetAnalyzer = () => {
+   309→    setReportText('');
+   310→    setFileName('');
+   311→    setImagePreview(null);
+   312→    setAnalysis(null);
+   313→    setAnalysisError(null);
+   314→    setLabName('');
+   315→    setInputMode('text');
+   316→  };
+   317→
+   318→  const toggleSpeak = () => {
+   319→    if (!analysis) return;
+   320→    if (isSpeaking) {
+   321→      window.speechSynthesis.cancel();
+   322→      setIsSpeaking(false);
+   323→    } else {
+   324→      const success = speakText(analysis.summary_hi + '. ' + (analysis.critical_alerts.length > 0 ? 'सावधान: कुछ मान खतरनाक हैं। डॉक्टर से मिलें।' : ''));
+   325→      if (success) setIsSpeaking(true);
+   326→    }
+   327→  };
+   328→
+   329→  // ============================================
+   330→  // TREND CALCULATION
+   331→  // ============================================
+   332→  const getTrend = (currentName: string, currentValue: number) => {
+   333→    if (savedReports.length < 2) return null;
+   334→    // Find previous report
+   335→    const prevReport = savedReports[1]; // The one before the current one being viewed (if we are viewing history) or just the last saved one if we just analyzed. 
+   336→    // Actually, if we just analyzed, the current analysis is savedReports[0]. We compare with savedReports[1].
+   337→    // If we are just viewing, we need to know which one is "current". For simplicity, we compare the displayed analysis biomarkers with the immediately preceding report in history if available.
+   338→    
+   339→    // Let's find the previous report that has the same test name.
+   340→    // Since structure is nested in categories, we need to search.
+   341→    if (!prevReport) return null;
+   342→
+   343→    for (const cat of Object.values(prevReport.analysis.categories)) {
+   344→      const prevItem = cat.find((b: BiomarkerItem) => b.name_en === currentName);
+   345→      if (prevItem) {
+   346→        const diff = currentValue - prevItem.value;
+   347→        if (Math.abs(diff) < 0.1) return { icon: <Minus className="w-3 h-3 text-slate-400" />, text: 'Stable', color: 'text-slate-500' };
+   348→        
+   349→        const higherIsGood = isHigherBetter(currentName);
+   350→        const isImproving = (diff > 0 && higherIsGood) || (diff < 0 && !higherIsGood);
+   351→        
+   352→        if (isImproving) return { icon: <TrendingDown className={`w-4 h-4 text-emerald-500`} />, text: 'Improving', color: 'text-emerald-600' }; // Down is good for bad things like sugar, Up is good for Hemoglobin. Wait.
+   353→        // If Higher is Better (Hemoglobin): Current > Prev -> Good (Green Up). Current < Prev -> Bad (Red Down).
+   354→        // If Lower is Better (Glucose): Current < Prev -> Good (Green Down). Current > Prev -> Bad (Red Up).
+   355→        
+   356→        if (higherIsGood) {
+   357→            return diff > 0 
+   358→                ? { icon: <TrendingUp className="w-4 h-4 text-emerald-500" />, text: `Was ${prevItem.value} - Improving!`, color: 'text-emerald-600' }
+   359→                : { icon: <TrendingDown className="w-4 h-4 text-red-500" />, text: `Was ${prevItem.value} - Dropping`, color: 'text-red-600' };
+   360→        } else {
+   361→            return diff < 0
+   362→                ? { icon: <TrendingDown className="w-4 h-4 text-emerald-500" />, text: `Was ${prevItem.value} - Improving!`, color: 'text-emerald-600' }
+   363→                : { icon: <TrendingUp className="w-4 h-4 text-red-500" />, text: `Was ${prevItem.value} - Rising`, color: 'text-red-600' };
+   364→        }
+   365→      }
+   366→    }
+   367→    return null;
+   368→  };
+   369→
+   370→  // Calculate Health Score
+   371→  const healthScore = analysis ? Math.round((Object.values(analysis.categories).flat().filter((b: any) => b.status === 'normal').length / Math.max(1, Object.values(analysis.categories).flat().length)) * 100) : 0;
+   372→
+   373→  // ============================================
+   374→  // RENDER
+   375→  // ============================================
+   376→
+   377→  return (
+   378→    <div className="space-y-6 max-w-5xl mx-auto">
+   379→      {/* HERO */}
+   380→      <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-slate-900 via-indigo-950 to-purple-950 text-white shadow-2xl p-6 sm:p-10">
+   381→        {/* Premium Background Animation Layer */}
+   382→        <HeaderBackground className="opacity-60" />
+   383→        
+   384→        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-gradient-to-br from-cyan-500/20 to-purple-500/20 rounded-full blur-3xl -mr-40 -mt-40 animate-pulseGlow" />
+   385→        <div className="relative z-10">
+   386→            <div className="flex items-center gap-3 mb-4">
+   387→            <div className="p-3 bg-gradient-to-br from-cyan-500 to-purple-600 text-white rounded-2xl shadow-lg"><FileText className="w-7 h-7" /></div>
+   388→            <div>
+   389→              <h1 className="text-2xl sm:text-3xl font-black tracking-tight">Nexura AI Lab Report Analyzer</h1>
+   390→              <div className="flex items-center gap-2 mt-2 flex-wrap">
+   391→                <span className="text-xs text-white/70">Expert Indian Medical Analysis · Hindi + English · Trends & Alerts</span>
+   392→                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">Powered by NidaanKosha-100k-V1 (Eka Care)</span>
+   393→              </div>
+   394→            </div>
+   395→          </div>
+   396→        </div>
+   397→      </div>
+   398→
+   399→      {/* CRITICAL ALERTS BANNER */}
+   400→      {analysis && analysis.critical_alerts.length > 0 && (
+   401→        <div className="bg-red-600 text-white p-6 rounded-3xl shadow-2xl border-4 border-red-800 animate-pulse">
+   402→          <div className="flex items-start gap-4">
+   403→            <AlertOctagon className="w-12 h-12 flex-shrink-0" />
+   404→            <div className="flex-1">
+   405→              <h2 className="text-2xl font-black uppercase tracking-wider mb-2">🚨 Critical Health Alert</h2>
+   406→              <p className="text-lg font-bold mb-4">Dangerously abnormal values detected. Immediate action required.</p>
+   407→              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+   408→                {analysis.critical_alerts.map((alert, i) => (
+   409→                  <div key={i} className="bg-red-800/50 p-4 rounded-2xl border border-red-400">
+   410→                    <p className="font-black text-xl">{alert.test_name_en} / {alert.test_name_hi}</p>
+   411→                    <p className="text-3xl font-black mt-1">{alert.value} <span className="text-lg font-normal text-red-200">{alert.unit}</span> <span className="text-sm font-normal text-red-300">(Normal: {alert.normal_range})</span></p>
+   412→                    <p className="mt-2 text-sm font-medium">{alert.emergency_action_en}</p>
+   413→                    <p className="text-sm font-medium text-red-200">{alert.emergency_action_hi}</p>
+   414→                  </div>
+   415→                ))}
+   416→              </div>
+   417→              <a href="tel:108" className="flex items-center justify-center gap-4 bg-white text-red-700 p-4 rounded-2xl font-black text-xl hover:bg-red-50 transition-colors">
+   418→                <Phone className="w-8 h-8" />
+   419→                <span>Call 108 Immediately if experiencing severe symptoms</span>
+   420→              </a>
+   421→            </div>
+   422→          </div>
+   423→        </div>
+   424→      )}
+   425→
+   426→      {!analysis ? (
+   427→        /* ═══════════ INPUT SECTION ═══════════ */
+   428→        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+   429→          <div className="lg:col-span-2 bg-white border border-slate-100 p-6 rounded-3xl shadow-sm">
+   430→            <h2 className="text-base font-extrabold text-slate-900 mb-4">Enter Lab Report</h2>
+   431→            
+   432→            {/* Patient Info */}
+   433→            <div className="grid grid-cols-3 gap-3 mb-4">
+   434→              <select value={gender} onChange={e => setGender(e.target.value as any)} className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm"><option value="male">Male</option><option value="female">Female</option></select>
+   435→              <input type="number" value={age} onChange={e => setAge(+e.target.value)} className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm" placeholder="Age" />
+   436→              <input type="text" value={labName} onChange={e => setLabName(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm" placeholder="Lab Name" />
+   437→            </div>
+   438→
+   439→            {/* Input Mode Tabs */}
+   440→            <div className="flex gap-2 mb-4 bg-slate-100 p-1 rounded-xl">
+   441→              {(['text', 'file', 'camera'] as const).map(mode => (
+   442→                <button key={mode} onClick={() => setInputMode(mode)} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-colors ${inputMode === mode ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+   443→                  {mode === 'text' ? 'Paste Text' : mode === 'file' ? 'Upload File' : 'Take Photo'}
+   444→                </button>
+   445→              ))}
+   446→            </div>
+   447→
+   448→            {/* Input Area */}
+   449→            {inputMode === 'text' && (
+   450→              <textarea value={reportText} onChange={e => setReportText(e.target.value)} placeholder="Paste report text... e.g. Hemoglobin: 11.2 g/dL" className="w-full h-64 bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm font-mono focus:ring-2 focus:ring-indigo-500 resize-none" />
+   451→            )}
+   452→            {inputMode === 'file' && (
+   453→              <div className="border-2 border-dashed border-slate-200 rounded-2xl p-8 text-center hover:border-indigo-400 transition-colors">
+   454→                <input ref={fileInputRef} type="file" accept=".txt,.csv,.pdf,.jpg,.png,.jpeg,.webp" onChange={handleFileUpload} className="hidden" />
+   455→                <button onClick={() => fileInputRef.current?.click()} className="flex flex-col items-center gap-2">
+   456→                  <Upload className="w-10 h-10 text-slate-400" />
+   457→                  <span className="text-sm font-bold text-slate-700">Click to Upload Report</span>
+   458→                  <span className="text-xs text-slate-400">PDF, Image, or Text file</span>
+   459→                </button>
+   460→                {fileName && <p className="mt-4 text-sm font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full inline-block">{fileName}</p>}
+   461→              </div>
+   462→            )}
+   463→            {inputMode === 'camera' && (
+   464→              <div className="border-2 border-dashed border-slate-200 rounded-2xl p-8 text-center">
+   465→                <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" onChange={handleCameraCapture} className="hidden" />
+   466→                <button onClick={() => cameraInputRef.current?.click()} className="flex flex-col items-center gap-2">
+   467→                  <Camera className="w-10 h-10 text-slate-400" />
+   468→                  <span className="text-sm font-bold text-slate-700">Tap to Open Camera</span>
+   469→                  <span className="text-xs text-slate-400">Take a photo of your report</span>
+   470→                </button>
+   471→              </div>
+   472→            )}
+   473→
+   474→            {/* Preview */}
+   475→            {imagePreview && (
+   476→              <div className="mt-4 relative rounded-2xl overflow-hidden border border-slate-200">
+   477→                <img src={imagePreview} alt="Preview" className="w-full h-48 object-cover" />
+   478→                <button onClick={() => setImagePreview(null)} className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full"><X className="w-4 h-4" /></button>
+   479→              </div>
+   480→            )}
+   481→
+   482→            {/* Actions */}
+   483→            <div className="flex gap-3 mt-6">
+   484→              <button onClick={analyzeReport} disabled={(!reportText.trim() && !imagePreview) || isAnalyzing} className={`flex-1 py-3.5 rounded-2xl text-sm font-bold flex items-center justify-center gap-2 ${(!reportText.trim() && !imagePreview) || isAnalyzing ? 'bg-slate-100 text-slate-400' : 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg'}`}>
+   485→                {isAnalyzing ? <><Loader2 className="w-4 h-4 animate-spin" /> Analyzing...</> : <><Sparkles className="w-4 h-4" /> Analyze Report</>}
+   486→              </button>
+   487→              <button onClick={loadDemoReport} className="px-5 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-2xl text-sm">Demo</button>
+   488→              {savedReports.length > 0 && <button onClick={() => setShowHistory(true)} className="px-5 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-2xl text-sm flex items-center gap-1"><History className="w-4 h-4" /> History</button>}
+   489→            </div>
+   490→            {analysisError && <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-2xl text-sm text-red-700">{analysisError}</div>}
+   491→          </div>
+   492→
+   493→          {/* Sidebar Info */}
+   494→          <div className="bg-white border border-slate-100 p-6 rounded-3xl shadow-sm">
+   495→            <h2 className="text-base font-extrabold text-slate-900 mb-4 flex items-center gap-2"><Search className="w-5 h-5 text-indigo-500" /> How it works</h2>
+   496→            <div className="space-y-4 text-sm text-slate-600">
+   497→              <div className="flex gap-3"><div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold text-xs flex-shrink-0">1</div><p>Upload report text, file, or take a photo.</p></div>
+   498→              <div className="flex gap-3"><div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold text-xs flex-shrink-0">2</div><p>AI extracts values and compares with Indian ranges.</p></div>
+   499→              <div className="flex gap-3"><div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold text-xs flex-shrink-0">3</div><p>Get bilingual explanations, trends, and alerts.</p></div>
+   500→            </div>
+   501→            <div className="mt-6 p-4 bg-amber-50 border border-amber-100 rounded-xl text-xs text-amber-800">
+   502→              <strong>💡 Tip:</strong> For best results, ensure the report text includes values and units (e.g., "11.2 g/dL").
+   503→            </div>
+   504→          </div>
+   505→        </div>
+   506→      ) : (
+   507→        /* ═══════════ RESULTS SECTION ═══════════ */
+   508→        <div className="space-y-6 animate-fadeIn">
+   509→          {/* Header Actions */}
+   510→          <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+   511→            <div>
+   512→              <h2 className="text-lg font-black text-slate-900">Analysis Results</h2>
+   513→              <p className="text-xs text-slate-500">{labName} · {age}y/o {gender} · {new Date().toLocaleDateString()}</p>
+   514→            </div>
+   515→            <div className="flex gap-2">
+   516→              <div className="flex items-center gap-2 bg-slate-50 px-4 py-2 rounded-xl border border-slate-200">
+   517→                <span className="text-xs font-bold text-slate-500 uppercase">Health Score</span>
+   518→                <span className={`text-xl font-black ${healthScore > 80 ? 'text-emerald-600' : healthScore > 50 ? 'text-amber-600' : 'text-red-600'}`}>{healthScore}/100</span>
+   519→              </div>
+   520→              <button onClick={toggleSpeak} className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 ${isSpeaking ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>
+   521→                {isSpeaking ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />} {isSpeaking ? 'Stop Voice' : 'Listen (Hindi)'}
+   522→              </button>
+   523→              <button onClick={() => shareToWhatsApp(analysis, age, gender)} className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold flex items-center gap-2">
+   524→                <Share2 className="w-4 h-4" /> Share with Doctor
+   525→              </button>
+   526→              <button onClick={resetAnalyzer} className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold">New Report</button>
+   527→            </div>
+   528→          </div>
+   529→
+   530→          {/* Personalized Summary - Most Important */}
+   531→          <div className="bg-gradient-to-br from-indigo-50 to-purple-50 border-2 border-indigo-200 p-6 rounded-3xl shadow-lg">
+   532→            <h3 className="text-lg font-black text-indigo-900 mb-3 flex items-center gap-2">
+   533→              <HeartPulse className="w-5 h-5" /> In Simple Words - What Your Body Is Telling You
+   534→            </h3>
+   535→            <div className="bg-white/80 backdrop-blur p-4 rounded-xl border border-indigo-100">
+   536→              <p className="text-base text-slate-800 leading-relaxed whitespace-pre-wrap">{analysis.summary_en}</p>
+   537→              <p className="text-sm text-slate-600 mt-3 italic whitespace-pre-wrap border-t border-slate-200 pt-3">{analysis.summary_hi}</p>
+   538→            </div>
+   539→          </div>
+   540→
+   541→          {/* Critical Alerts - If Any */}
+   542→          {analysis.critical_alerts && analysis.critical_alerts.length > 0 && (
+   543→            <div className="bg-red-600 text-white p-6 rounded-3xl shadow-2xl border-4 border-red-800 animate-pulse">
+   544→              <div className="flex items-start gap-4">
+   545→                <AlertOctagon className="w-12 h-12 flex-shrink-0" />
+   546→                <div className="flex-1">
+   547→                  <h2 className="text-2xl font-black uppercase tracking-wider mb-2">⚠️ CRITICAL ALERTS - SEEK IMMEDIATE MEDICAL ATTENTION</h2>
+   548→                  <p className="text-lg font-bold mb-4">Life-threatening values detected. Go to ER if you experience emergency symptoms.</p>
+   549→                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+   550→                    {analysis.critical_alerts.map((alert, i) => (
+   551→                      <div key={i} className="bg-red-800/50 p-4 rounded-2xl border border-red-400">
+   552→                        <p className="font-black text-xl">{alert.test_name_en} / {alert.test_name_hi}</p>
+   553→                        <p className="text-3xl font-black mt-1">{alert.value} <span className="text-lg font-normal text-red-200">{alert.unit}</span> <span className="text-sm font-normal text-red-300">(Normal: {alert.normal_range})</span></p>
+   554→                        <p className="mt-2 text-sm font-medium">{alert.emergency_action_en}</p>
+   555→                        <p className="text-sm font-medium text-red-200">{alert.emergency_action_hi}</p>
+   556→                      </div>
+   557→                    ))}
+   558→                  </div>
+   559→                  <a href="tel:108" className="flex items-center justify-center gap-4 bg-white text-red-700 p-4 rounded-2xl font-black text-xl hover:bg-red-50 transition-colors">
+   560→                    <Phone className="w-8 h-8" />
+   561→                    <span>Call 108 Immediately if experiencing severe symptoms</span>
+   562→                  </a>
+   563→                </div>
+   564→              </div>
+   565→            </div>
+   566→          )}
+   567→
+   568→          {/* Specialist Recommendation */}
+   569→          <div className="bg-sky-50 border border-sky-100 p-5 rounded-2xl flex items-start gap-4">
+   570→            <Activity className="w-8 h-8 text-sky-600 flex-shrink-0" />
+   571→            <div>
+   572→              <h3 className="font-bold text-sky-900">Recommended Specialist: {analysis.recommended_specialist.type}</h3>
+   573→              <p className="text-sm text-sky-700 mt-1"><strong>Urgency:</strong> {analysis.recommended_specialist.urgency}</p>
+   574→              <p className="text-sm text-sky-700">{analysis.recommended_specialist.reason_en}</p>
+   575→              <p className="text-sm text-sky-600 italic">{analysis.recommended_specialist.reason_hi}</p>
+   576→            </div>
+   577→          </div>
+   578→
+   579→          {/* Categories */}
+   580→          {Object.entries(analysis.categories).map(([categoryName, items]) => (
+   581→            items.length > 0 && (
+   582→              <div key={categoryName} className="bg-white border border-slate-100 rounded-3xl shadow-sm overflow-hidden">
+   583→                <div className="bg-slate-50 px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+   584→                  <h3 className="font-black text-slate-900 text-lg">{categoryName}</h3>
+   585→                  <span className="text-xs font-bold text-slate-500 bg-white px-2 py-1 rounded-lg border border-slate-200">{items.length} tests</span>
+   586→                </div>
+   587→                <div className="divide-y divide-slate-100">
+   588→                  {items.map((item, i) => {
+   589→                    const isExpanded = expandedCards.has(`${categoryName}-${i}`);
+   590→                    const statusColor = item.status === 'normal' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : item.status === 'borderline' ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-red-100 text-red-700 border-red-200';
+   591→                    const statusIcon = item.status === 'normal' ? '✓' : item.status === 'borderline' ? '⚠' : '✕';
+   592→                    const trend = getTrend(item.name_en, item.value);
+   593→
+   594→                    return (
+   595→                      <div key={i} className="p-4 hover:bg-slate-50 transition-colors">
+   596→                        <button onClick={() => setExpandedCards(prev => { const next = new Set(prev); if (next.has(`${categoryName}-${i}`)) next.delete(`${categoryName}-${i}`); else next.add(`${categoryName}-${i}`); return next; })} className="w-full flex items-start justify-between gap-4 text-left">
+   597→                          <div className="flex-1">
+   598→                            <div className="flex items-center gap-2 flex-wrap">
+   599→                              <span className="font-bold text-slate-900">{item.name_en}</span>
+   600→                              <span className="text-xs text-slate-500">/ {item.name_hi}</span>
+   601→                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${statusColor}`}>{statusIcon} {item.status.toUpperCase()}</span>
+   602→                              {trend && <span className={`text-[10px] font-bold flex items-center gap-1 ${trend.color}`}>{trend.icon} {trend.text}</span>}
+   603→                            </div>
+   604→                            <div className="mt-1 flex items-baseline gap-2">
+   605→                              <span className="text-2xl font-black text-slate-900">{item.value}</span>
+   606→                              <span className="text-xs text-slate-500">{item.unit}</span>
+   607→                              <span className="text-xs text-slate-400">(Normal: {item.normal_range})</span>
+   608→                            </div>
+   609→                          </div>
+   610→                          <div className="pt-2">{isExpanded ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}</div>
+   611→                        </button>
+   612→                        
+   613→                        {isExpanded && (
+   614→                          <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+   615→                            <div className="bg-slate-50 p-3 rounded-xl">
+   616→                              <p className="font-bold text-slate-700 mb-1 text-xs uppercase">Explanation</p>
+   617→                              <p className="text-slate-600 mb-2">{item.explanation_en}</p>
+   618→                              <p className="text-slate-500 italic">{item.explanation_hi}</p>
+   619→                            </div>
+   620→                            <div className="bg-slate-50 p-3 rounded-xl">
+   621→                              <p className="font-bold text-slate-700 mb-1 text-xs uppercase">Causes & Action</p>
+   622→                              <p className="text-slate-600 mb-1"><strong>Causes:</strong> {item.causes_en}</p>
+   623→                              <p className="text-emerald-700 font-medium"><strong>Action:</strong> {item.action_en}</p>
+   624→                            </div>
+   625→                          </div>
+   626→                        )}
+   627→                      </div>
+   628→                    );
+   629→                  })}
+   630→                </div>
+   631→              </div>
+   632→            )
+   633→          ))}
+   634→
+   635→          {/* Comprehensive Clinical Report (New Fields) */}
+   636→          {(analysis.organ_system_summary_en || analysis.diet_lifestyle_en || analysis.follow_up_plan_en) && (
+   637→            <div className="bg-white border border-slate-100 rounded-3xl shadow-sm overflow-hidden">
+   638→              <div className="bg-slate-900 px-6 py-4 border-b border-slate-800">
+   639→                <h3 className="font-black text-white text-lg flex items-center gap-2">
+   640→                  <FileText className="w-5 h-5 text-emerald-400" /> Comprehensive Clinical Pathologist Report
+   641→                </h3>
+   642→              </div>
+   643→              <div className="p-6 space-y-8">
+   644→                {analysis.organ_system_summary_en && (
+   645→                  <div>
+   646→                    <h4 className="text-base font-bold text-slate-900 mb-3 flex items-center gap-2">
+   647→                      <Activity className="w-4 h-4 text-indigo-500" /> Organ System Analysis
+   648→                    </h4>
+   649→                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
+   650→                      {analysis.organ_system_summary_en}
+   651→                    </div>
+   652→                    <div className="mt-2 text-sm text-slate-500 italic whitespace-pre-wrap leading-relaxed">
+   653→                      {analysis.organ_system_summary_hi}
+   654→                    </div>
+   655→                  </div>
+   656→                )}
+   657→                {analysis.disease_risk_assessment_en && (
+   658→                  <div>
+   659→                    <h4 className="text-base font-bold text-slate-900 mb-3 flex items-center gap-2">
+   660→                      <ShieldAlert className="w-4 h-4 text-rose-500" /> Disease Risk Assessment
+   661→                    </h4>
+   662→                    <div className="bg-rose-50/50 p-4 rounded-xl border border-rose-100 text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
+   663→                      {analysis.disease_risk_assessment_en}
+   664→                    </div>
+   665→                    <div className="mt-2 text-sm text-slate-500 italic whitespace-pre-wrap leading-relaxed">
+   666→                      {analysis.disease_risk_assessment_hi}
+   667→                    </div>
+   668→                  </div>
+   669→                )}
+   670→                {analysis.diet_lifestyle_en && (
+   671→                  <div>
+   672→                    <h4 className="text-base font-bold text-slate-900 mb-3 flex items-center gap-2">
+   673→                      <Sun className="w-4 h-4 text-amber-500" /> Dietary & Lifestyle Recommendations
+   674→                    </h4>
+   675→                    <div className="bg-amber-50/50 p-4 rounded-xl border border-amber-100 text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
+   676→                      {analysis.diet_lifestyle_en}
+   677→                    </div>
+   678→                    <div className="mt-2 text-sm text-slate-500 italic whitespace-pre-wrap leading-relaxed">
+   679→                      {analysis.diet_lifestyle_hi}
+   680→                    </div>
+   681→                  </div>
+   682→                )}
+   683→                {analysis.follow_up_plan_en && (
+   684→                  <div>
+   685→                    <h4 className="text-base font-bold text-slate-900 mb-3 flex items-center gap-2">
+   686→                      <Stethoscope className="w-4 h-4 text-sky-500" /> Medical Follow-Up Plan
+   687→                    </h4>
+   688→                    <div className="bg-sky-50/50 p-4 rounded-xl border border-sky-100 text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
+   689→                      {analysis.follow_up_plan_en}
+   690→                    </div>
+   691→                    <div className="mt-2 text-sm text-slate-500 italic whitespace-pre-wrap leading-relaxed">
+   692→                      {analysis.follow_up_plan_hi}
+   693→                    </div>
+   694→                  </div>
+   695→                )}
+   696→              </div>
+   697→            </div>
+   698→          )}
+   699→
+   700→          {/* Disclaimer */}
+   701→          <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl text-xs text-amber-800 leading-relaxed">
+   702→            <strong>⚠️ Medical Disclaimer:</strong> This AI analysis is for informational purposes only and is NOT a medical diagnosis. Always consult qualified healthcare professionals. If any value is flagged as critical, seek immediate medical attention. Call 108 for emergencies.
+   703→          </div>
+   704→        </div>
+   705→      )}
+   706→
+   707→      {/* ═══════════ HISTORY MODAL ═══════════ */}
+   708→      {showHistory && (
+   709→        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn" onClick={() => setShowHistory(false)}>
+   710→          <div className="bg-white rounded-3xl p-6 w-full max-w-2xl shadow-2xl animate-fadeInScale max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+   711→            <div className="flex items-center justify-between mb-4">
+   712→              <h3 className="text-lg font-extrabold text-slate-900 flex items-center gap-2"><History className="w-5 h-5 text-indigo-500" /> Report History</h3>
+   713→              <button onClick={() => setShowHistory(false)} className="p-2 rounded-xl hover:bg-slate-100"><X className="w-5 h-5 text-slate-500" /></button>
+   714→            </div>
+   715→            <div className="overflow-y-auto space-y-3 pr-2">
+   716→              {savedReports.length === 0 ? <p className="text-center text-slate-500 py-8">No history yet.</p> : savedReports.map((r, idx) => (
+   717→                <div key={r.id} className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex items-center justify-between gap-3">
+   718→                  <div className="flex-1">
+   719→                    <div className="flex items-center gap-2">
+   720→                      <p className="text-sm font-bold text-slate-900">{r.labName}</p>
+   721→                      {idx === 0 && <span className="text-[9px] font-bold bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded">Latest</span>}
+   722→                    </div>
+   723→                    <p className="text-xs text-slate-500">{new Date(r.date).toLocaleString()}</p>
+   724→                  </div>
+   725→                  <div className="flex gap-2">
+   726→                    <button onClick={() => { setAnalysis(r.analysis); setLabName(r.labName); setAge(r.patientAge); setGender(r.patientGender as any); setShowHistory(false); }} className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700">View</button>
+   727→                    <button onClick={() => setSavedReports(prev => prev.filter(rep => rep.id !== r.id))} className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
+   728→                  </div>
+   729→                </div>
+   730→              ))}
+   731→            </div>
+   732→          </div>
+   733→        </div>
+   734→      )}
+   735→
+   736→      {/* ═══════════ LOADING OVERLAY ═══════════ */}
+   737→      {isAnalyzing && (
+   738→        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+   739→          <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-md w-full text-center">
+   740→            <div className="w-20 h-20 mx-auto bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center animate-pulseGlow mb-6"><Sparkles className="w-10 h-10 text-white" /></div>
+   741→            <h3 className="text-xl font-black text-slate-900 mb-2">AI is Analyzing...</h3>
+   742→            <p className="text-sm text-slate-500 mb-6">Extracting values and checking against Indian medical standards.</p>
+   743→            <div className="space-y-3 text-left">
+   744→              {['Extracting biomarkers...', 'Analyzing with AI...', 'Cross-referencing ranges...', 'Generating insights...', 'Building recommendations...'].map((s, i) => (
+   745→                <div key={i} className={`flex items-center gap-3 text-sm ${i <= processingStep ? 'text-slate-900 font-bold' : 'text-slate-300'}`}>
+   746→                  {i < processingStep ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : i === processingStep ? <Loader2 className="w-5 h-5 text-indigo-500 animate-spin" /> : <div className="w-5 h-5 rounded-full border-2 border-slate-200" />}
+   747→                  {s}
+   748→                </div>
+   749→              ))}
+   750→            </div>
+   751→          </div>
+   752→        </div>
+   753→      )}
+   754→    </div>
+   755→  );
+   756→};
+   757→

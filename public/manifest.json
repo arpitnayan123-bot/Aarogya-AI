@@ -1,0 +1,19 @@
+{
+  "name": "Aarogya AI — Healthcare Intelligence",
+  "short_name": "Aarogya AI",
+  "description": "AI-powered health intelligence for every Indian",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f1117",
+  "theme_color": "#10b981",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ],
+  "categories": ["health", "medical"],
+  "language": "en-IN",
+  "shortcuts": [
+    { "name": "Emergency", "url": "/emergency" },
+    { "name": "Health Score", "url": "/" }
+  ]
+}

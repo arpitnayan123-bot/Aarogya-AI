@@ -1,0 +1,302 @@
+     1→# Nexura AI — Worklog & Handover Document
+     2→
+     3→## Project Overview
+     4→Transforming the Nexura AI (Aarogya AI) healthcare platform from a Vite + React SPA into a world-class, production-ready Next.js 16 application with:
+     5→- Real AI orchestration via z-ai-web-dev-sdk (LLM + VLM)
+     6→- Prisma + SQLite persistence
+     7→- Medical safety layer (risk detection, escalation, disclaimers)
+     8→- Modular, scalable architecture
+     9→- All 23 healthcare modules connected through a shared context/memory system
+    10→
+    11→## Architecture (Target)
+    12→```
+    13→┌──────────────────────────────────────────────────────────────────┐
+    14→│                    NEXT.JS 16 APP ROUTER (PORT 3000)              │
+    15→│  Landing → Dashboard Hub → 21 Health Modules (single / route)    │
+    16→└───────────────┬──────────────────────────────────────────────────┘
+    17→                │ REST API (relative paths)
+    18→                ▼
+    19→┌──────────────────────────────────────────────────────────────────┐
+    20→│                    API ROUTES (/app/api/*)                        │
+    21→│  /ai/chat  /ai/symptom  /ai/lab-report  /ai/xray                 │
+    22→│  /ai/diet  /ai/prediction  /health/metrics                       │
+    23→└───────┬──────────────────────────────────┬───────────────────────┘
+    24→        │                                  │
+    25→        ▼                                  ▼
+    26→┌──────────────────────┐        ┌──────────────────────┐
+    27→│  AI ORCHESTRATOR     │        │   PRISMA (SQLite)    │
+    28→│  • Provider (SDK)    │        │  • User profiles     │
+    29→│  • Prompts (medical) │        │  • Health metrics    │
+    30→│  • Cache (in-mem)    │        │  • Chat sessions     │
+    31→│  • Safety layer      │        │  • Lab reports       │
+    32→│  • Retry + fallback  │        │  • Appointments      │
+    33→└──────────────────────┘        └──────────────────────┘
+    34→        │
+    35→        ▼
+    36→┌──────────────────────┐
+    37→│  z-ai-web-dev-sdk    │
+    38→│  • LLM (chat/medical)│
+    39→│  • VLM (xray/skin)   │
+    40→└──────────────────────┘
+    41→```
+    42→
+    43→## Module Connection Logic (Orchestration)
+    44→All 7 AI modules share context via the orchestrator:
+    45→1. **Symptom Analyzer** → triggers Lab Report / Prediction recommendations
+    46→2. **Lab Report Engine** → feeds biomarker data to Prediction Engine + Diet System
+    47→3. **Diet System** → uses Lab + Symptom context for personalized plans
+    48→4. **Prediction Engine** → consumes Lab + Metrics + Symptom data
+    49→5. **Emotional Companion** → has access to user's health context for empathetic responses
+    50→6. **Fact-check Engine** → validates AI outputs against medical databases
+    51→7. **Radiology Module** → feeds findings to Symptom + Prediction engines
+    52→
+    53→## Safety Layer
+    54→- Medical disclaimers on every AI output
+    55→- Risk detection: red-flag symptoms → emergency escalation
+    56→- Confidence scoring: low-confidence outputs flagged
+    57→- Hallucination prevention: structured JSON schemas + validation
+    58→- Doctor recommendation logic for non-routine cases
+    59→
+    60→---
+    61→Task ID: 1
+    62→Agent: Main (Architect)
+    63→Task: Foundation — design system, layout, types, Prisma schema, AI backend
+    64→
+    65→Work Log:
+    66→- Analyzed uploaded Nexura AI codebase (Vite + React, 23 components, ~10.5K lines)
+    67→- Designed Next.js 16 migration architecture
+    68→- Building foundation layer
+    69→
+    70→---
+    71→Task ID: 3a
+    72→Agent: full-stack-developer
+    73→Task: Build Landing, NexuraLogo, DNABackground, Dashboard components
+    74→
+    75→Work Log:
+    76→- Read worklog.md to absorb project context (Nexura AI = Aarogya AI migrated to Next.js 16 App Router; foundation already laid by Agent 1: design system in globals.css, types in @/types/nexura, AI orchestrator, Prisma, 7 AI API routes).
+    77→- Read the 4 original Vite source files in /upload/nexura-source/src/components/ (NexuraLogo, DNABackground, Landing, Dashboard) to capture design intent.
+    78→- Read globals.css to inventory available animations: animate-fadeIn, animate-fadeSlideUp, animate-floatBob, animate-pulseGlow, animate-glowPulse, animate-spinRing, animate-orbitOrbit, animate-counterPop, stagger-1..6, gradient-text-emerald, glass, dna-bg. Noted `orbit` keyframe (uses --radius CSS var) is defined.
+    79→- Read @/types/nexura.ts to align with the shared type system.
+    80→- Created /src/components/nexura/ directory.
+    81→- Wrote NexuraLogo.tsx:
+    82→  • 'use client' directive.
+    83→  • Premium SVG: emerald (#6ee7b7) → teal (#14b8a6) → deep-teal (#0f766e) radial gradient (per "emerald/teal gradient" spec — original blue end replaced with deep teal).
+    84→  • Heart outline + ECG line with a custom nxLogoEcgDraw stroke-dash animation (defined inline in a scoped <style> block) so the ECG traces itself on a loop — gives the mark a "living" medical pulse.
+    85→  • React.useId()-based gradient/filter IDs so multiple logos coexist safely on one page.
+    86→  • Also exports NexuraLogoText (compact logo + wordmark) with onDark prop for use on dark backgrounds.
+    87→  • Respects prefers-reduced-motion.
+    88→- Wrote DNABackground.tsx:
+    89→  • 'use client' directive.
+    90→  • Two intertwined DNA helix strands (cyan + teal) with 9 base-pair connectors and 14 data-flow particles drifting upward.
+    91→  • 3 soft glow orbs (cyan/teal/emerald) + subtle grid overlay.
+    92→  • `processing` prop intensifies opacity, particle speed, and glow brightness — used by Dashboard to signal user activity.
+    93→  • All custom keyframes (nxDnaFloat, nxParticleFlow, nxGlowIntensify, nxGlowSubtle) defined in a scoped <style> block — does NOT touch globals.css, so no merge conflict with other parallel agents.
+    94→  • useMemo for stable particle/base-pair arrays (SSR-safe, no hydration mismatch).
+    95→  • aria-hidden + pointer-events-none so it never blocks UI.
+    96→  • Respects prefers-reduced-motion.
+    97→- Wrote Landing.tsx:
+    98→  • 'use client' directive. Props: { onStart: () => void }.
+    99→  • Dark slate-950 background with 3 layered radial gradients (emerald/teal/cyan) + animated grid + 22 deterministic floating particles.
+   100→  • Hero: trust badge → orbital animation (3 counter-rotating rings + central NexuraLogo inside a clickable glowing button) → 8 orbiting medical icons (HeartPulse, Pill, Syringe, Beaker, TestTube2, Droplet, Stethoscope, FlaskConical) using the `orbit` keyframe with --radius CSS var.
+   101→  • Headline "Healthcare, Reimagined" using gradient-text-emerald class.
+   102→  • CTA "Open Health Hub" with shine-sweep hover effect + ShieldCheck trust line.
+   103→  • 4-stat counter row (23+ AI Tools / 17 Datasets / 11 Languages / 4.9 Rating) with animate-counterPop.
+   104→  • "Why Nexura AI?" section with 4 capability cards (Medical Data Structuring, Clinical Insight Generation, Risk Identification, Health Data Interpretation) using gradient icon tiles + hover lift/glow.
+   105→  • Closing CTA copy with animated pulse dots.
+   106→  • "Trusted by" footer strip (ICMR-INDIAB, NFHS-5, AI4Bharat, etc.).
+   107→  • SSR FIX: replaced original `window.innerWidth < 640 ? 150 : 180` with useState(false) + useEffect resize listener; initial render uses desktop radius to avoid layout shift.
+   108→  • HYDRATION FIX: replaced Math.random()-based particle positions with deterministic (i * 37 + 11) % 100 formulas so server and client markup match.
+   109→  • All animations used (fadeSlideUp, spinRing, glowPulse, floatBob, counterPop, pulseGlow, stagger-*) already exist in globals.css.
+   110→- Wrote Dashboard.tsx:
+   111→  • 'use client' directive. Props: { onNavigate: (tab: string) => void }.
+   112→  • Light theme with DNABackground accent layer (intensifies on user activity).
+   113→  • Emotional-context intro ("Millions of patients receive medical reports they don't understand. Nexura AI helps you understand them instantly.") + animated ECG divider.
+   114→  • Compact dark hero card (slate-950 → emerald-950 gradient) with grid pattern, floating particles, "Ready to help" badge, "Your Health, Clearly Understood" headline (gradient-text-emerald), trust indicators, and the RotatingSkeletonHUD on the right.
+   115→  • RotatingSkeletonHUD: ultra-premium anatomical heart SVG with chambers (left/right ventricle + atrium), valves (aortic/mitral/tricuspid), coronary arteries with animated blood flow (dash march), specular highlights, 7 orbiting energy particles (4 clockwise + 3 counter-clockwise), expanding pulse rings, cardiac cycle scaling, hologram glow, and a moving scan line. Two orbit rings + 4 counter-rotating medical icons (HeartPulse/Activity/ScanLine/Zap) + 4 data-stream dots around the heart.
+   116→  • User-activity tracking: window mousemove/click/scroll → setIsUserActive(true) for 2s → heart HUD and DNA background intensify. SSR-safe (all inside useEffect). Uses useRef for the idle timer to avoid stale closures.
+   117→  • Bento grid: 7 feature cards (Lab Reports, Diabetes Care, Symptom Checker, Health Assistant, Health Trends, Risk Assessment, DermAI Scan) — each calls onNavigate(feature.id). Fixed the original's broken dynamic `stagger-${i+3}` classes (stagger-7/8/9 don't exist) by using inline animationDelay only.
+   118→  • Each card has shimmer overlay, hover glow, gradient icon tile with scale+rotate, "Open →" affordance.
+   119→  • Trust & values strip: 3 cards (Privacy, In Your Language, Human-Centered AI).
+   120→  • All ~20 custom keyframes (nxOrbit, nxOrbitCounter, nxDataStream, nxHeartBreathe, nxHeartRotateY, nxHeartFlip, nxHeartTilt, nxHologram, nxGlowBoost, nxHeartGlowPulse, nxPulseRing, nxCardiac, nxChamber, nxValve, nxBloodFlow, nxSpecularSweep, nxParticleOrbit, nxParticleOrbitRev, nxScanLine, nxEcgFlow, nxSoftGlow, nxCardShimmer, nxFloatParticle) defined in a single scoped <style> block at the bottom of the component — keeps globals.css untouched.
+   121→  • Respects prefers-reduced-motion (disables all animations).
+   122→- Verified all 4 files exist via `ls -la` (DNABackground.tsx 7.7KB, Dashboard.tsx 34.8KB, Landing.tsx 17.6KB, NexuraLogo.tsx 6.1KB).
+   123→- Ran `bun run lint` — clean, zero errors.
+   124→- Checked dev.log — dev server running cleanly, no compile errors.
+   125→
+   126→Stage Summary:
+   127→- 4 production-quality Nexura components delivered in /src/components/nexura/:
+   128→  • NexuraLogo.tsx — animated emerald/teal SVG logo with ECG draw animation + NexuraLogoText variant. Default + named exports.
+   129→  • DNABackground.tsx — ambient DNA helix layer with processing-aware intensity. Default + named exports.
+   130→  • Landing.tsx — dark spectacular landing page with orbital hero, stats, "Why Nexura AI" section, trusted-by strip. Takes onStart prop. SSR + hydration safe.
+   131→  • Dashboard.tsx — light dashboard hub with DNA background, dark hero card containing a fully-animated anatomical heart HUD, bento grid of 7 modules, trust strip. Takes onNavigate prop. SSR-safe activity tracking.
+   132→- All components are 'use client', use lucide-react icons, import from @/components/nexura/*, and leverage the existing design system (gradient-text-emerald, glass, animate-* classes from globals.css).
+   133→- Self-contained: every custom animation is defined in a scoped <style> block inside the component that needs it — globals.css was NOT modified, eliminating merge-conflict risk with parallel agents.
+   134→- Accessibility: aria-hidden on decorative backgrounds, aria-label on the logo button, role="img" on the logo, prefers-reduced-motion respected everywhere.
+   135→- SSR safety: no `window` access during render (only inside useEffect); deterministic particle positions; useState-based viewport detection in Landing.
+   136→- Ready to be composed by the main page (Agent 1 / 3b): `import { Landing } from '@/components/nexura/Landing'` and `import { Dashboard } from '@/components/nexura/Dashboard'` with a tab-state switch driving onNavigate.
+   137→
+   138→---
+   139→Task ID: 3b
+   140→Agent: full-stack-developer
+   141→Task: Build AIChat, SymptomChecker, CommandPalette components
+   142→
+   143→Work Log:
+   144→- Read /home/z/my-project/worklog.md to absorb project context (Nexura AI = Aarogya AI migrated to Next.js 16 App Router; foundation laid by Agent 1: design system in globals.css, types in @/types/nexura, AI orchestrator, Prisma, 7 AI API routes; Agent 3a delivered Landing/Dashboard/NexuraLogo/DNABackground).
+   145→- Read the 3 original Vite source files in /upload/nexura-source/src/components/ (AIChat, SymptomChecker, ui/CommandPalette) to capture design intent + features.
+   146→- Read @/types/nexura.ts (SymptomAnalysis uses primary_symptoms/possible_conditions[{name,probability,reasoning}]/urgency[routine|within_week|urgent|emergency]/red_flags/recommended_specialty/suggested_tests/home_care/when_to_see_doctor/summary_en/summary_hi/confidence), @/data/aiSimulator.ts (simulateHealthChatReply signature), @/data/symptomDatabase.ts (findSymptomEntry + SEVERITY_CONFIG exports), @/app/api/ai/{chat,symptom}/route.ts (request/response shapes), @/lib/ai/safety.ts (sanitizeInput), @/app/globals.css (available animations: animate-fadeIn, animate-fadeInScale, animate-spinRing, animate-pulseGlow, scan-line, scrollbar-slim, gradient-text-emerald, glass, urgency-*, status-*, shadow-premium).
+   147→- Wrote CommandPalette.tsx (~11 KB):
+   148→  • 'use client' directive. Props: { open, onClose, items, onSelect }. Exports CommandItem interface { id, label, group, emoji, icon?, keywords? }.
+   149→  • Premium glass-morphism: bg-white/80 backdrop-blur-2xl + emerald/teal gradient blobs + 0.18s animate-fadeInScale.
+   150→  • Grouped results by `group` field with section headers (upgrades the original Vite flat list to a sectioned premium layout).
+   151→  • Full keyboard nav: ArrowUp/Down wraps, Enter selects active, Escape closes. Active item gets gradient highlight + ring + auto-scrollIntoView via [data-idx] selector.
+   152→  • Render-time state sync pattern (prevOpen/prevQuery tracking) — fixes react-hooks/set-state-in-effect lint error using the official React recommendation (no setState-in-effect cascading renders).
+   153→  • Body scroll lock while open + restored on close. Footer shows kbd hints.
+   154→- Wrote AIChat.tsx (~26 KB):
+   155→  • 'use client' directive. Props: { metrics, setTab }.
+   156→  • Multi-session chat: default welcome session, "New Consultation" button, per-session delete (keeps ≥1). Sessions persisted to localStorage under `nexura_chat_sessions_v1`.
+   157→  • SSR-safe: initial state seeded with default session, hydrates from localStorage in useEffect (no window access during render → no hydration mismatch).
+   158→  • Real AI: fetch('/api/ai/chat', { method:'POST', body: JSON.stringify({ message, context: { metrics, age: metrics.age, gender: metrics.gender, conversationHistory } }) }). Builds a 6-message rolling context window from active session for conversational memory.
+   159→  • Graceful fallback: on any API failure (network / non-OK / empty data.response), falls back to simulateHealthChatReply(message, metrics) from @/data/aiSimulator. Stamps the AI message with an "Offline mode" amber badge + 70% confidence so the user is never blocked.
+   160→  • Confidence badge: every AI message renders "{confidence}% confidence" emerald pill when data.confidence present.
+   161→  • Emergency disclaimer: when safetyFlags includes 'emergency_symptom', renders a red AlertTriangle banner with 112 (India) / 911 (US) emergency numbers.
+   162→  • Suggestion chips: welcome message ships 4 suggestions; clicking smart-routes via setTab('diet_plan' | 'appointments' | 'symptom_checker' | 'mental_health' | 'lab_report') or sends as a new message.
+   163→  • Emerald/teal theme (per spec — NOT indigo/blue): user bubbles use from-emerald-600 to-teal-700, AI bubbles use white with teal avatars, header is from-emerald-600 via-teal-600 to-cyan-700.
+   164→  • Multi-line input: textarea with auto-grow (min 48px, max 140px). Enter sends, Shift+Enter for newline (documented in placeholder).
+   165→  • Auto-scroll to bottom on new messages / typing indicator.
+   166→  • Lite markdown renderer (no deps): bold **text** becomes emerald-bold, bullet lines get • prefix.
+   167→  • Mobile responsive: sidebar hidden on mobile, replaced with a "Sessions" dropdown in the chat header.
+   168→  • Typing indicator: 3 bouncing emerald dots + "Nexura AI is thinking…" caption.
+   169→- Wrote SymptomChecker.tsx (~45 KB):
+   170→  • 'use client' directive. Props: { onBookDoctor?, age?=30, gender?='unspecified' } (added age/gender as optional props with defaults since the spec requires context:{age,gender} for the API call but original only had onBookDoctor).
+   171→  • Real AI: fetch('/api/ai/symptom', { method:'POST', body: JSON.stringify({ symptoms, context: { age, gender } }) }). Response defensively normalized to SymptomAnalysis type from @/types/nexura — every field has a fallback so partial AI outputs don't crash the UI.
+   172→  • Scan animation during analysis: uses existing .scan-line class from globals.css + from-emerald-50/50 via-transparent to-teal-50/50 animate-pulseGlow overlay + spinning emerald/teal ring (.animate-spinRing) wrapping pulsing Activity icon + 3-stage checklist (NER Extraction / Clinical Reasoning / Safety Check) that pops in with staggered delays via a scoped nxStagePop keyframe.
+   173→  • Minimum 900ms delay via Promise.all([fetch, minDelay]) so even fast AI responses get the scan animation presence — feels clinical, not jumpy.
+   174→  • Local NER display: inline extractEntities() function detects symptom/body_part/severity/duration/medication entities with DETERMINISTIC (non-random) confidence scores so SSR matches client. Entities rendered as color-coded chips with mini progress bars.
+   175→  • Local database matching: findSymptomEntry(symptomText) from @/data/symptomDatabase powers a premium dark "Matched Symptom · Indian Healthcare Dataset" card with severity badge, avg duration, region, language count, disease count, condition chips.
+   176→  • Bilingual summaries: side-by-side English (emerald) + Hindi (teal) cards. Hindi card has show/hide toggle and lang="hi" for proper rendering.
+   177→  • Urgency banner with 4 levels (routine/within_week/urgent/emergency) using URGENCY_CONFIG map — color-coded badges with appropriate icons (CheckCircle2/AlertCircle/AlertTriangle/ShieldAlert).
+   178→  • Emergency banner: when urgency === 'emergency' OR safetyFlags.includes('emergency_symptom'), a prominent red banner with emergency numbers is shown at the top of the analysis card.
+   179→  • Structured results sections: Possible Conditions (with low/moderate/high probability pills + reasoning), Red Flags (red grid), Home Care (emerald grid with 🌿), When to See a Doctor (emerald checklist), Suggested Tests (cyan checklist), Recommended Specialty (gradient card with Book Doctor button calling onBookDoctor).
+   180→  • Confidence badge: color-coded (emerald ≥85%, amber ≥70%, red <70%) next to the urgency badge in the analysis header.
+   181→  • Medical disclaimer prominently displayed in an amber card at the bottom alongside a "Check New Symptoms" reset button.
+   182→  • Error retry: on API failure, an inline red panel with a "Retry analysis" button — no full-state reset, user keeps their input.
+   183→  • Model info panel: collapsible emerald/teal card showing IndicNER metadata (languages, base model, training data, license).
+   184→  • Emerald/teal primary throughout (per spec — no indigo/blue). Red/amber/orange ONLY used for clinically meaningful urgency/warning indicators.
+   185→- Verified all 3 files exist via `ls -la` (AIChat 26KB, CommandPalette 11KB, SymptomChecker 45KB).
+   186→- Ran `bun run lint` — first pass surfaced 2 `react-hooks/set-state-in-effect` errors in CommandPalette (setState in effect for open-reset and query-reset). Fixed using the React-recommended render-time state sync pattern (prevOpen/prevQuery tracking). Second lint pass — CLEAN, zero errors.
+   187→- Checked dev.log — dev server compiling successfully (`✓ Compiled in ~5s`), no errors.
+   188→- Wrote work record to /agent-ctx/3b-full-stack-developer.md per system-prompt requirement.
+   189→
+   190→Stage Summary:
+   191→- 3 production-quality Nexura components delivered in /src/components/nexura/:
+   192→  • CommandPalette.tsx — glass-morphism Cmd+K palette with grouped results, full keyboard nav (↑/↓/Enter/Esc), render-time state sync, body scroll lock, emerald/teal accent ring on active item. Default + named exports.
+   193→  • AIChat.tsx — multi-session AI Companion chat connected to real /api/ai/chat. Multi-session + localStorage persistence, 6-message rolling context window, graceful fallback to simulateHealthChatReply on API failure (with "Offline mode" badge), confidence pill on every AI message, emergency disclaimer banner when safetyFlags includes 'emergency_symptom', suggestion chips that smart-route via setTab, multi-line auto-growing textarea (Enter sends / Shift+Enter newline), lite markdown renderer (no deps), mobile-responsive session dropdown. Emerald/teal theme replaces original indigo/violet.
+   194→  • SymptomChecker.tsx — clinical symptom analysis connected to real /api/ai/symptom. Defensive normalization to SymptomAnalysis type, premium scan animation (scan-line + pulseGlow + spinRing + staggered stage checklist), local IndicNER-style entity extraction with deterministic confidence, findSymptomEntry database matching with dark "Matched Symptom" card, bilingual EN/HI summaries with toggle, 4-level urgency badge, emergency banner, structured results (possible conditions w/ probability + reasoning, red flags, home care, when to see doctor, suggested tests, recommended specialty w/ Book Doctor CTA), confidence badge (color-coded), medical disclaimer, retry-on-error.
+   195→- All 3 are 'use client', use lucide-react icons, import only from @/types/nexura / @/data/* (no new dependencies added).
+   196→- All fetch calls use RELATIVE paths (/api/ai/chat, /api/ai/symptom) — no absolute URLs, no port hardcoding, Caddy-gateway compatible.
+   197→- ZERO modifications to globals.css — every custom animation (nxStagePop) lives in a scoped <style jsx> block, eliminating merge-conflict risk with parallel agents.
+   198→- SSR-safe: no window/localStorage access during render; deterministic entity confidence scores (no Math.random() in render path); useState-based hydration in AIChat.
+   199→- Accessibility: aria-label/aria-modal on palette, role="dialog", keyboard navigation, lang="hi" on Hindi summary, focus management.
+   200→- Ready to be composed by the main page: `import { AIChat } from '@/components/nexura/AIChat'`, `import { SymptomChecker } from '@/components/nexura/SymptomChecker'`, `import { CommandPalette } from '@/components/nexura/CommandPalette'`.
+   201→
+   202→---
+   203→Task ID: 3c
+   204→Agent: full-stack-developer
+   205→Task: Build ReportAnalyzer, XrayReader, MedicalImageQA, SkinAnalyzer components
+   206→
+   207→Work Log:
+   208→- Read /home/z/my-project/worklog.md to absorb project context (Nexura AI = Aarogya AI migrated to Next.js 16 App Router; foundation laid by Agent 1: design system in globals.css, types in @/types/nexura, AI orchestrator, Prisma, 7 AI API routes; Agent 3a delivered Landing/Dashboard/NexuraLogo/DNABackground; Agent 3b delivered AIChat/SymptomChecker/CommandPalette).
+   209→- Read the 4 original Vite source files in /upload/nexura-source/src/components/ (ReportAnalyzer, XrayReader, MedicalImageQA, SkinAnalyzer) to capture design intent + features.
+   210→- Read @/types/nexura.ts — confirmed LabReportAnalysis, Biomarker, XrayAnalysis, XrayFinding type shapes.
+   211→- Read all 3 relevant API route files (/api/ai/lab-report, /api/ai/xray, /api/ai/skin) + @/lib/ai/orchestrator.ts — confirmed request/response shapes. The orchestrator wraps every response in AIResult { success, data, model, tokens, latency_ms, cached, traceId, confidence, safetyFlags }; components must read result.data for the actual analysis payload.
+   212→- Read @/data/labReportAnalysis.ts — BIOMARKER_DATABASE is 28+ markers across categories (Blood/CBC, Metabolic/Diabetes, Lipid Profile, Liver, Kidney, Thyroid, Vitamins, Inflammation, Iron Studies, Hormones, Cancer Markers, Electrolytes) with rangeMale/rangeFemale/hindiName fields.
+   213→- Read @/app/globals.css — inventoried available animations: animate-fadeIn, animate-fadeInScale, animate-pulseGlow, animate-spinRing, .scan-line, .shimmer, .glass, .gradient-text-emerald, .urgency-*, .status-*, .shadow-glow*, .grid-bg, .dna-bg, .scrollbar-slim/.scrollbar-emerald. NO modifications made to globals.css — all custom animations are scoped <style> blocks per component.
+   214→- Wrote ReportAnalyzer.tsx (~36 KB):
+   215→  • 'use client' directive. Default + named export.
+   216→  • Real AI: fetch('/api/ai/lab-report', { method:'POST', body: JSON.stringify({ reportText, context: { age, gender, labName } }) }). Reads result.data (LabReportAnalysis) + result.confidence/model/cached.
+   217→  • Defensive normalizeAnalysis(raw) — maps any AI response into strict LabReportAnalysis shape with fallbacks for every field.
+   218→  • Patient context inputs (gender/age/lab name), sample report button (realistic multi-category demo).
+   219→  • Loading overlay with 5-stage checklist (scoped nxLabStagePop stagger + scan-line on overlay top edge).
+   220→  • Critical alerts emergency banner — red, pulsing box-shadow (nxLabAlertPulse), 2-col alert grid, tel:108 call link.
+   221→  • Overall status banner (4 levels), health score (computed from % normal biomarkers, color-coded), confidence badge (color-coded).
+   222→  • Bilingual summary card (EN emerald gradient + HI italic with lang="hi"), recommended specialist card (cyan).
+   223→  • Category cards with biomarker items — 4-level status badges (normal/borderline/abnormal/critical with icons ✓/⚠/✕/☠), expandable to reveal bilingual explanation + causes + action. Category header has relevant lucide icon (Droplet/Beaker/HeartPulse/FlaskConical/Activity/Microscope/Sun/Zap).
+   224→  • BIOMARKER_DATABASE reference panel (collapsible) — imports from @/data/labReportAnalysis, 2-col grid of 28+ markers with gender-specific ranges, scrollbar-slim max-height scroll.
+   225→  • TTS (Hindi) via speechSynthesis with lang='hi-IN', cleanup on unmount. WhatsApp share with formatted summary.
+   226→  • Medical disclaimer (amber, ShieldAlert icon). Error handling with inline retry button.
+   227→  • Emerald/teal primary — replaced original indigo/purple/sky. Red/amber/orange ONLY for clinical severity.
+   228→- Wrote XrayReader.tsx (~34 KB):
+   229→  • 'use client' directive. Default + named export.
+   230→  • Real AI: fetch('/api/ai/xray', { method:'POST', body: JSON.stringify({ imageBase64, text: optionalQuestion || scanTypePrompt }) }).
+   231→  • fileToBase64 helper (FileReader.readAsDataURL → strip data:...;base64, prefix). Stores raw base64 (for API) + data URL (for preview).
+   232→  • Drag-drop + file picker with isDragOver visual feedback. Validates image type + ≤10 MB.
+   233→  • 4 scan types (Chest CXR/Bone/Spine/Skull) with lucide icons + default prompts. Optional question textarea.
+   234→  • Scan animation: emerald grid overlay (nxXrayGridPulse) + horizontal scan sweep (nxXrayScanSweep) + 4 corner brackets + status pill. Scoped <style> block — no globals.css changes.
+   235→  • Image quality indicator (3 levels), urgency indicator (4 levels), summary banner with thumbnail + stats.
+   236→  • Bilingual impression (emerald gradient, EN + HI lang="hi"). Findings list with 4-level severity badges + confidence bars (color-coded by severity), expandable.
+   237→  • Recommendations grid (numbered emerald cards). Strong radiology disclaimer (amber, "research purposes only" + "must be interpreted by licensed radiologist").
+   238→  • Model info panel (collapsible) — BiomedVLP-CXR-BERT-Specialized metadata (RadNLI 65.21%, Mask Prediction 81.58%, CNR 1.142, MIMIC-CXR/PubMed/MIMIC-III training, MIT license). Error handling with retry.
+   239→- Wrote MedicalImageQA.tsx (~29 KB):
+   240→  • 'use client' directive. Default + named export.
+   241→  • Real AI: fetch('/api/ai/xray', { method:'POST', body: JSON.stringify({ imageBase64, text: question }) }) — same VLM endpoint.
+   242→  • Conversation history — array of QATurn { id, question, answer, confidence, impression_hi, findings, recommendations, urgency, timestamp, error? }. Multiple follow-up questions on same image.
+   243→  • Optimistic placeholder turn — empty turn added immediately with animated typing dots (nxQaTyping), filled when API responds.
+   244→  • Layout: image panel (left, lg:sticky) + conversation panel (right, h-[600px] scrollable). Chat-style UI: user bubbles (emerald gradient, right-aligned) + AI bubbles (slate-50, left-aligned).
+   245→  • Each AI bubble: answer text, optional Hindi impression, confidence pill (color-coded), urgency pill, expandable findings list + recommendations.
+   246→  • Sample question chips (5 clinical questions). Input bar with auto-growing textarea (Enter to send, Shift+Enter newline), send button with loading spinner. Auto-scroll to latest turn.
+   247→  • Per-turn error handling — failed turns get red styling + error message. BiomedCLIP model info panel (collapsible) — PMC-15M dataset (15M pairs), PubMedBERT + ViT, zero-shot classification, 4 core applications.
+   248→  • Research-use disclaimer (amber). Emerald/teal theme replaces original violet/indigo.
+   249→- Wrote SkinAnalyzer.tsx (~33 KB):
+   250→  • 'use client' directive. Default + named export.
+   251→  • Real AI: fetch('/api/ai/skin', { method:'POST', body: JSON.stringify({ imageBase64, text: optionalDescription }) }).
+   252→  • fileToBase64 helper. Drag-drop + file picker with validation. Optional description textarea (itchy rash, acne flare-up, changing dark spot, etc.).
+   253→  • Premium dark hero header (slate-950 → teal-950 → emerald-950 gradient) with "Powered by Fitzpatrick 17k & ISIC Datasets" badge, animated pulse glow orbs, Microscope icon, "DermAI Skin Scan" headline with gradient-text-emerald.
+   254→  • Scan animation: expanding ring (nxSkinRing) + horizontal scan sweep (nxSkinSweep 2.6s) + 4 corner brackets + "Cross-referencing Fitzpatrick 17k & ISIC" status pill.
+   255→  • 3-stat preview row (skin type AI-detected, skin tone Fitzpatrick, privacy in-browser).
+   256→  • Summary banner with image thumbnail + background image overlay, attention count, confidence, findings count. Urgency banner (4 levels).
+   257→  • Optional dermatology profile (skin_type/skin_tone if AI returns them) — 2-card row with Droplets/Sun icons.
+   258→  • Bilingual impression (teal gradient, EN + HI). Findings list with 4-level severity badges + confidence bars + expandable observations. Possible conditions with probability badges (low/moderate/high) + reasoning. Recommendations grid.
+   259→  • Strong dermatologist referral disclaimer — prominent rose/amber gradient card with Stethoscope icon: "NOT a medical diagnosis", "definitively diagnosed by qualified dermatologist through in-person examination, dermoscopy, and biopsy", "changing/bleeding/rapidly growing lesion → seek prompt professional evaluation", "Do not delay medical care based on AI output".
+   260→  • Reminder banner about false-positive/false-negative rates. Scan Another Photo reset button. Emerald/teal/cyan primary (replaces original teal/indigo mix).
+   261→- Verified all 4 files exist via `ls -la` (MedicalImageQA 29KB, ReportAnalyzer 36KB, SkinAnalyzer 33KB, XrayReader 34KB).
+   262→- Ran `bun run lint` — CLEAN, zero errors (first pass, no fixes needed).
+   263→- Checked dev.log — dev server compiling successfully (`✓ Compiled in 5.8s`), no errors. Only an unrelated `allowedDevOrigins` cross-origin warning from the preview-chat sandbox (not a code issue).
+   264→- Wrote work record to /agent-ctx/3c-full-stack-developer.md per system-prompt requirement.
+   265→
+   266→Stage Summary:
+   267→- 4 production-quality Nexura AI components delivered in /src/components/nexura/:
+   268→  • ReportAnalyzer.tsx — Lab report text analyzer connected to real /api/ai/lab-report. Patient context inputs, sample report, 5-stage loading checklist, critical alerts emergency banner (108 call link), bilingual summary, specialist recommendation, expandable category cards with 4-level status badges, BIOMARKER_DATABASE reference panel (28+ markers), TTS (Hindi), WhatsApp share, health score + confidence badges, medical disclaimer. Default + named exports.
+   269→  • XrayReader.tsx — X-ray image analyzer connected to real /api/ai/xray. Drag-drop upload → base64, 4 scan types (Chest/Bone/Spine/Skull), optional question, premium scan animation (grid + sweep + corner brackets), image quality + urgency indicators, bilingual impression, severity-badged findings with confidence bars, recommendations, strong radiology disclaimer, BiomedVLP-CXR-BERT model info panel. Default + named exports.
+   270→  • MedicalImageQA.tsx — Visual Q&A with conversation history, connected to real /api/ai/xray. Optimistic placeholder turns with typing dots, chat-style bubbles (emerald user / slate AI), per-turn confidence + urgency pills, expandable findings + recommendations, sample question chips, Enter-to-send textarea, BiomedCLIP model info panel, research-use disclaimer. Default + named exports.
+   271→  • SkinAnalyzer.tsx — Dermatology image analyzer connected to real /api/ai/skin. Dark hero header, drag-drop upload → base64, optional description, expanding-ring + scan-sweep animation, urgency banner, optional skin type/tone profile, bilingual impression, severity-badged findings, possible conditions with probability badges, recommendations, strong dermatologist referral disclaimer. Default + named exports.
+   272→- All 4 are 'use client', use lucide-react icons, import types from @/types/nexura (where applicable), use emerald/teal primary colors (NO indigo/blue per spec), premium glass-morphism design with scan animations, loading states, error handling with retry, prominent medical disclaimers, confidence scores, file uploads converted to base64, all fetch calls use RELATIVE paths only (/api/ai/lab-report, /api/ai/xray, /api/ai/skin).
+   273→- ZERO modifications to globals.css — every custom animation (nxLabStagePop, nxLabAlertPulse, nxXrayScanSweep, nxXrayGridPulse, nxQaTyping, nxQaScanSweep, nxSkinSweep, nxSkinRing) lives in a scoped <style> block inside the component that needs it, eliminating merge-conflict risk with parallel agents.
+   274→- SSR-safe: no window/document access during render (TTS, WhatsApp share, speechSynthesis all inside event handlers or useEffect cleanup). No Math.random() in render path.
+   275→- Accessibility: aria-label on icon-only buttons, aria-expanded on expandable cards, lang="hi" on Hindi text, semantic HTML, keyboard-friendly textareas (Enter to send in QA).
+   276→- Defensive normalization on every AI response — partial/missing fields get fallbacks so the UI never crashes. Network errors show inline retry panels.
+   277→- Ready to be composed by the main page: `import { ReportAnalyzer } from '@/components/nexura/ReportAnalyzer'`, `import { XrayReader } from '@/components/nexura/XrayReader'`, `import { MedicalImageQA } from '@/components/nexura/MedicalImageQA'`, `import { SkinAnalyzer } from '@/components/nexura/SkinAnalyzer'`.
+   278→
+   279→---
+   280→Task ID: cron-review-2
+   281→Agent: Main (Cron Review Round 2)
+   282→Task: Fix lab report JSON parsing, add Health Score Widget, add Daily Challenge feature, improve styling
+   283→
+   284→Work Log:
+   285→- Read worklog.md — confirmed all 25 components built, main page wired, 7 bugs fixed in prior session
+   286→- Ran `bun run lint` — passed clean (0 errors)
+   287→- QA tested via agent-browser:
+   288→  • Landing page renders correctly with orbital animation
+   289→  • Dashboard renders with all 21 sidebar nav items
+   290→  • AI Chat works (no more sessions.find error)
+   291→  • Predictive Analytics works (no more avgRisk error)
+   292→  • Symptom Checker connects to real AI
+   293→  • All modules accessible
+   294→- Identified known issue: Lab Report Analyzer displaying raw JSON when AI wraps response in markdown fences
+   295→- Root cause analysis: AI sometimes returns `critical_alerts` array as top-level instead of full object, AND wraps in ```json fences
+   296→- Created `src/lib/ai/jsonExtractor.ts` — robust JSON extraction utility with:
+   297→  • 5 extraction strategies: direct parse, markdown fence extraction, balanced brace matching (objects preferred over arrays), balanced bracket matching, preamble cleanup
+   298→  • Proper string escape handling
+   299→  • Handles partial JSON gracefully
+   300→- Updated `src/lib/ai/orchestrator.ts` to use extractJSON for vision responses
+
+[showing lines 1-300 of 1912; use offset=301 with limit to continue reading]
