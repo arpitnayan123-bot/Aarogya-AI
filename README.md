@@ -4,11 +4,11 @@
 > From lab analysis to Ayurveda, ABDM to pharmacogenomics — all in one place.
 
 <p align="center">
-  <a href="http://47.57.232.232:81">
+  <a href="https://aarogya-ai.space-z.ai">
     <img src="https://img.shields.io/badge/🚀_LIVE_DEMO-Aarogya_AI-10b981?style=for-the-badge&logo=rocket&logoColor=white" alt="Live Demo" />
   </a>
   <br><br>
-  <strong>👉 Click here to try the live app: <a href="http://47.57.232.232:81">http://47.57.232.232:81</a></strong>
+  <strong>👉 Click here to try the live app: <a href="https://aarogya-ai.space-z.ai">https://aarogya-ai.space-z.ai</a></strong>
 </p>
 
 <p align="center">
@@ -126,7 +126,7 @@
 ## ⚡ Quick Start
 
 ### 🌐 Try the Live Demo
-**👉 [http://47.57.232.232:81](http://47.57.232.232:81)** — No installation needed!
+**👉 [https://aarogya-ai.space-z.ai](https://aarogya-ai.space-z.ai)** — No installation needed!
 
 ### Run Locally
 
@@ -396,11 +396,11 @@ For emergencies, call **112** (India).
 
 ## 📞 Contact
 
-- **🚀 Live Demo**: [http://47.57.232.232:81](http://47.57.232.232:81)
+- **🚀 Live Demo**: [https://aarogya-ai.space-z.ai](https://aarogya-ai.space-z.ai)
 - **GitHub**: [github.com/arpitnayan123-bot/Aarogya-AI](https://github.com/arpitnayan123-bot/Aarogya-AI)
 - **Research Partnerships**: research@aarogyaai.in
 - **Safety Reports**: safety@aarogyaai.in
-- **Developer Docs**: [/developers](http://47.57.232.232:81/developers)
+- **Developer Docs**: [/developers](https://aarogya-ai.space-z.ai/developers)
 
 ---
 
