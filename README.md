@@ -4,6 +4,14 @@
 > From lab analysis to Ayurveda, ABDM to pharmacogenomics — all in one place.
 
 <p align="center">
+  <a href="http://47.57.232.232:81">
+    <img src="https://img.shields.io/badge/🚀_LIVE_DEMO-Aarogya_AI-10b981?style=for-the-badge&logo=rocket&logoColor=white" alt="Live Demo" />
+  </a>
+  <br><br>
+  <strong>👉 Click here to try the live app: <a href="http://47.57.232.232:81">http://47.57.232.232:81</a></strong>
+</p>
+
+<p align="center">
   <strong>🇮🇳 Made in India · for Bharat · Powered by AI</strong>
 </p>
 
@@ -116,6 +124,11 @@
 ---
 
 ## ⚡ Quick Start
+
+### 🌐 Try the Live Demo
+**👉 [http://47.57.232.232:81](http://47.57.232.232:81)** — No installation needed!
+
+### Run Locally
 
 ### Prerequisites
 - [Bun](https://bun.sh) v1.0+
@@ -383,10 +396,11 @@ For emergencies, call **112** (India).
 
 ## 📞 Contact
 
-- **Website**: [Aarogya AI](https://github.com/arpitnayan123-bot/Aarogya-AI)
+- **🚀 Live Demo**: [http://47.57.232.232:81](http://47.57.232.232:81)
+- **GitHub**: [github.com/arpitnayan123-bot/Aarogya-AI](https://github.com/arpitnayan123-bot/Aarogya-AI)
 - **Research Partnerships**: research@aarogyaai.in
 - **Safety Reports**: safety@aarogyaai.in
-- **Developer Docs**: [/developers](/developers)
+- **Developer Docs**: [/developers](http://47.57.232.232:81/developers)
 
 ---
 
